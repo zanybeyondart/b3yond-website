@@ -1,0 +1,11 @@
+---
+import { nav } from '~/data/site';
+---
+
+<header class="site-header" data-header>
+  <a class="wordmark" href="#top" aria-label="B3YOND home">B3YOND<span aria-hidden="true">®</span></a>
+  <nav aria-label="Primary navigation">
+    {nav.map((item) => <a href={item.href}>{item.label}</a>)}
+  </nav>
+  <a class="header-cta" href="mailto:hello@b3yond.studio">Start a project <span aria-hidden="true">↗</span></a>
+</header>

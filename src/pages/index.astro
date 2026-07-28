@@ -1,0 +1,91 @@
+---
+import MainLayout from '~/layouts/MainLayout.astro';
+import ProjectCard from '~/components/ProjectCard.astro';
+import { capabilities, projects } from '~/data/site';
+
+const title = 'B3YOND — Creative & Technology Studio';
+const description =
+  'An independent creative and technology studio building brands, films, digital products and intelligent experiences.';
+---
+
+<MainLayout {title} {description}>
+  <section class="hero" id="top">
+    <div class="hero-noise" aria-hidden="true"></div>
+    <div class="hero-orbit" aria-hidden="true"><span>B</span></div>
+    <div class="hero-copy">
+      <p class="eyebrow">Independent creative + technology studio</p>
+      <h1>We create what<br />comes <em>b3yond.</em></h1>
+      <div class="hero-bottom">
+        <p>Ideas, images and intelligent systems for ambitious brands navigating what’s next.</p>
+        <a href="#work" class="round-link" aria-label="Explore selected work">↓</a>
+      </div>
+    </div>
+    <div class="hero-coordinates" aria-hidden="true">
+      <span>25.2048° N</span><span>55.2708° E</span><span>DXB / UAE</span>
+    </div>
+  </section>
+
+  <section class="manifesto section-pad" id="studio">
+    <p class="section-label" data-reveal>What we believe</p>
+    <div class="manifesto-grid">
+      <h2 data-reveal>Not an agency.<br />A force multiplier.</h2>
+      <div data-reveal>
+        <p>We connect creative intuition with technical intelligence to turn bold ideas into work that matters.</p>
+        <p class="muted">Strategy to screen. Concept to code. Human imagination, amplified.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="work section-pad" id="work">
+    <div class="section-intro" data-reveal>
+      <p class="section-label">Selected explorations / 2025—26</p>
+      <h2>Designed to<br /><i>shift perspective.</i></h2>
+      <p>Visual placeholders indicate the intended art direction and can be replaced from one editable data file.</p>
+    </div>
+    <div class="project-grid">
+      {projects.map((project, index) => <ProjectCard project={project} wide={index === 0 || index === 3} />)}
+    </div>
+  </section>
+
+  <section class="capabilities section-pad" id="capabilities">
+    <div class="capabilities-heading" data-reveal>
+      <p class="section-label">Capabilities</p>
+      <h2>One studio.<br />No boundaries.</h2>
+    </div>
+    <div class="capability-list">
+      {
+        capabilities.map((item) => (
+          <article data-reveal>
+            <span>{item.number}</span>
+            <h3>{item.title}</h3>
+            <p>{item.text}</p>
+            <b aria-hidden="true">↗</b>
+          </article>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="signal section-pad" aria-label="Studio statement">
+    <div class="signal-art" aria-hidden="true"><span>B3</span><span>YOND</span></div>
+    <div class="signal-copy" data-reveal>
+      <p class="section-label">Built for the in-between</p>
+      <h2>Where culture meets code.</h2>
+      <p>Independent by design. Global by nature. Based in Dubai, working everywhere.</p>
+    </div>
+  </section>
+
+  <footer class="footer section-pad" id="contact">
+    <div class="footer-top">
+      <p class="section-label">Have an impossible idea?</p>
+      <h2>Let’s go<br /><i>b3yond.</i></h2>
+      <a href="mailto:hello@b3yond.studio">hello@b3yond.studio <span>↗</span></a>
+    </div>
+    <div class="footer-bottom">
+      <a class="wordmark" href="#top">B3YOND<span>®</span></a>
+      <p>Creative direction / Film / AI / Digital</p>
+      <div><span>Instagram</span><span>LinkedIn</span><span>Vimeo</span></div>
+      <small>© 2026 B3YOND STUDIO. ALL SIGNALS RESERVED.</small>
+    </div>
+  </footer>
+</MainLayout>

@@ -1,0 +1,20 @@
+---
+interface Props {
+  project: { index: string; title: string; type: string; year: string; image: string; tone: string };
+  wide?: boolean;
+}
+const { project, wide = false } = Astro.props;
+---
+
+<article class:list={['project-card', wide && 'project-card--wide']} data-reveal>
+  <div class={`project-visual tone-${project.tone}`}>
+    <img src={project.image} alt="Abstract placeholder artwork" width="1600" height="1100" loading="lazy" />
+    <span class="project-index">{project.index}</span>
+    <span class="placeholder-label">Concept placeholder</span>
+  </div>
+  <div class="project-meta">
+    <h3>{project.title}</h3>
+    <p>{project.type}</p>
+    <span>{project.year}</span>
+  </div>
+</article>
