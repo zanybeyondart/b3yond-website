@@ -5,6 +5,8 @@ export const BOOTHS = [
 
 const retiredKiosk = { id: 'grand', name: 'Touchscreen Kiosk', description: 'A large-format touchscreen for a more prominent event setup.' };
 export const SCREEN_SIZES = [24, 27, 32];
+export const VIDEO_SECONDS = [5, 10, 15];
+export const VIDEO_RESOLUTIONS = ['720p', '1080p'];
 
 export function getBooth(type) {
   return type === retiredKiosk.id ? retiredKiosk : BOOTHS.find(booth => booth.id === type);
@@ -35,12 +37,13 @@ export const RATE_CARD = {
   currency: 'AED',
   includedHours: 3,
   boothDay: { mirror: 2100, classic: 1650, grand: 2400 },
-  experienceDay: { frame: 0, aiPhoto: 600, aiVideo: 1200 },
+  aiPhotoRate: 2,
+  videoRate15Seconds: { '720p': 6, '1080p': 12 },
   overtimeHour: 400,
   earlySetupHour: 100,
   addonDay: { queue: 350, stanchions: 150, printer: 350 },
-  deliverySetup: { qr: 0, email: 0 },
-  promoterDay: 450,
+  deliverySetup: { qr: 100, email: 150 },
+  promoterHour: 75,
   transportDay: { Ajman: 150, Sharjah: 175, Dubai: 200, 'Abu Dhabi': 500 },
   longDayDiscountDay: 1600,
 };
@@ -51,7 +54,8 @@ export function createUnit(type, id = globalThis.crypto.randomUUID()) {
     startTime: '', endTime: '', earlySetup: false,
     reportTime: '', reportDayOffset: 0, addons: type === 'mirror' ? ['printer', 'email'] : [],
     screenSide: 'either', screenSize: 24, venueEmirate: '', longDayOffer: false,
-    staffing: 'client', additionalStaff: 0,
+    staffing: 'client', additionalStaff: 0, staffHoursPerDay: '',
+    expectedGuests: '', aiMode: 'fixed', aiQuantity: '', videoResolution: '720p', videoSeconds: 15,
   };
 }
 
@@ -143,6 +147,62 @@ export function scheduleInfo(unit) {
   };
 }
 
+function blank(value) {
+  return value == null || (typeof value === 'string' && value.trim() === '');
+}
+
+function positiveCount(value) {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count > 0 ? count : null;
+}
+
+export function generationInfo(unit, rates = RATE_CARD) {
+  const ai = unit.experience === 'aiPhoto' || unit.experience === 'aiVideo';
+  const mode = unit.aiMode ?? 'fixed';
+  const expectedGuests = positiveCount(unit.expectedGuests);
+  const allocation = blank(unit.aiQuantity) ? expectedGuests : positiveCount(unit.aiQuantity);
+  const cycleSeconds = Array.isArray(unit.addons) && unit.addons.includes('queue') ? 20 : 45;
+  const { days, hoursPerDay } = scheduleInfo(unit);
+  // Each daily session starts afresh. Partial cycles cannot carry into the next day.
+  const sessionSeconds = hoursPerDay === null ? null : Math.round(hoursPerDay * 60) * 60;
+  const capacityPerDay = sessionSeconds === null ? null : Math.floor(sessionSeconds / cycleSeconds);
+  const capacity = days === null || capacityPerDay === null ? null : capacityPerDay * days;
+  const quantity = !ai ? null : mode === 'fixed' ? allocation : mode === 'unlimited' ? capacity : null;
+  let unitPrice = null;
+  if (unit.experience === 'aiPhoto' && validRate(rates.aiPhotoRate)) unitPrice = rates.aiPhotoRate;
+  if (unit.experience === 'aiVideo') {
+    const resolution = unit.videoResolution ?? '720p';
+    const seconds = Number(unit.videoSeconds ?? 15);
+    const base = rates.videoRate15Seconds?.[resolution];
+    if (VIDEO_RESOLUTIONS.includes(resolution) && VIDEO_SECONDS.includes(seconds) && validRate(base)) {
+      unitPrice = money(base * seconds / 15);
+    }
+  }
+  const amount = quantity === null || unitPrice === null ? null : money(quantity * unitPrice);
+  const overCapacity = mode === 'fixed' && capacity !== null && allocation !== null && allocation > capacity;
+  const guestShortfall = expectedGuests === null || capacity === null ? null : Math.max(0, expectedGuests - capacity);
+  return { mode, expectedGuests, allocation, cycleSeconds, capacityPerDay, capacity, quantity, unitPrice, amount, overCapacity, guestShortfall };
+}
+
+export function staffingInfo(unit, rates = RATE_CARD) {
+  const { days, hoursPerDay: eventHours } = scheduleInfo(unit);
+  const extra = unit.additionalStaff ?? 0;
+  const people = (unit.staffing === 'b3yond' ? 1 : 0) + (Number.isInteger(extra) && extra >= 0 && extra <= 20 ? extra : 0);
+  const rate = validRate(rates.promoterHour) ? rates.promoterHour : null;
+  let hoursPerDay = eventHours;
+  if (people && !blank(unit.staffHoursPerDay)) {
+    const hours = Number(unit.staffHoursPerDay);
+    const minutes = Math.round(hours * 60);
+    const wholeMinutes = Number.isFinite(hours) && Math.abs(hours * 60 - minutes) < 1e-7;
+    hoursPerDay = wholeMinutes && minutes > 0 && minutes < DAY_MINUTES &&
+      (eventHours === null || minutes <= Math.round(eventHours * 60)) ? minutes / 60 : null;
+  }
+  const personHours = !people ? 0 : hoursPerDay === null || days === null ? null : Math.round(hoursPerDay * 60) * days * people / 60;
+  const amount = personHours === null || rate === null ? null : money(personHours * rate);
+  return { people, hoursPerDay, personHours, rate, amount };
+}
+
 export function validateUnit(unit) {
   const errors = {};
   const schedule = scheduleInfo(unit);
@@ -157,6 +217,27 @@ export function validateUnit(unit) {
     errors.additionalStaff = 'Choose a whole number from 0 to 20.';
   }
   if (!EXPERIENCES.some(item => item.id === unit.experience)) errors.experience = 'Choose an experience.';
+  const ai = unit.experience === 'aiPhoto' || unit.experience === 'aiVideo';
+  if ((ai || !blank(unit.expectedGuests)) && positiveCount(unit.expectedGuests) === null) {
+    errors.expectedGuests = 'Enter the expected number of guests for this booth as a positive whole number.';
+  }
+  if (ai) {
+    const generation = generationInfo(unit);
+    if (!['fixed', 'unlimited'].includes(generation.mode)) errors.aiMode = 'Choose a generation plan.';
+    if (generation.mode === 'fixed' && !blank(unit.aiQuantity) && generation.allocation === null) {
+      errors.aiQuantity = 'Enter a positive whole number of generations.';
+    } else if (generation.overCapacity) {
+      errors.aiQuantity = 'This booth can serve up to ' + generation.capacity.toLocaleString('en-AE') + ' generations during this schedule. Reduce the allocation, enable queue management, extend the event, or split guests between booths.';
+    }
+    if (unit.experience === 'aiVideo') {
+      if (!VIDEO_RESOLUTIONS.includes(unit.videoResolution ?? '720p')) errors.videoResolution = 'Choose 720p or 1080p.';
+      if (!VIDEO_SECONDS.includes(Number(unit.videoSeconds ?? 15))) errors.videoSeconds = 'Choose a 5, 10 or 15-second video.';
+    }
+  }
+  const staff = staffingInfo(unit);
+  if (staff.people && !blank(unit.staffHoursPerDay) && staff.hoursPerDay === null) {
+    errors.staffHoursPerDay = 'Enter at least one minute, up to the event duration each day.';
+  }
   if (typeof unit.venue !== 'string' || !unit.venue.trim()) errors.venue = 'Enter the venue or event location.';
   if (dateValue(unit.startDate) === null) errors.startDate = 'Choose the first event date.';
   if (dateValue(unit.endDate) === null) errors.endDate = 'Choose the last event date.';
@@ -190,8 +271,11 @@ export function isLongDayOfferEligible(unit) {
 }
 
 export function addonPrice(id, type, rates = RATE_CARD) {
-  if (id === 'printer' && type === 'mirror') return 0;
   return digitalSetupIds.has(id) ? rates.deliverySetup?.[id] : rates.addonDay?.[id];
+}
+
+export function addonIncluded(id, type) {
+  return type === 'mirror' && (id === 'printer' || id === 'email');
 }
 
 const money = value => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -209,7 +293,15 @@ export function priceUnit(unit, rates = RATE_CARD) {
   const lines = [
     line(booth?.name || 'Booth hire', days, rates.boothDay?.[unit.type], 'day'),
   ];
-  if (experience) lines.push(line(experience.name, days, rates.experienceDay?.[experience.id], 'day'));
+  if (experience?.id === 'frame') {
+    lines.push(line('Branded frame', 1, 0, 'setup'));
+  } else if (experience) {
+    const generation = generationInfo(unit, rates);
+    const video = experience.id === 'aiVideo';
+    const format = video ? ' (' + (unit.videoResolution ?? '720p') + ', ' + (unit.videoSeconds ?? 15) + 's)' : '';
+    const plan = generation.mode === 'unlimited' ? 'unlimited during booked hours' : 'fixed allocation';
+    lines.push(line(experience.name + format + ' · ' + plan, generation.quantity, generation.unitPrice, video ? 'video' : 'photo'));
+  }
 
   const overtime = hoursPerDay !== null && validRate(rates.includedHours)
     ? Math.max(0, hoursPerDay - rates.includedHours) : null;
@@ -222,17 +314,23 @@ export function priceUnit(unit, rates = RATE_CARD) {
   if (unit.earlySetup) {
     lines.push(line('Earlier reporting', days !== null && earlyHoursPerDay !== null ? days * earlyHoursPerDay : null, rates.earlySetupHour, 'hour'));
   }
-  if (unit.staffing === 'b3yond') {
-    lines.push(line('B3YOND on-site promoter', days, rates.promoterDay, 'day'));
-  }
-  if (Number.isInteger(unit.additionalStaff) && unit.additionalStaff > 0 && unit.additionalStaff <= 20) {
-    lines.push(line('Additional on-site staff', days === null ? null : days * unit.additionalStaff, rates.promoterDay, 'person-day'));
+  const staff = staffingInfo(unit, rates);
+  if (staff.people) {
+    const label = staff.people === 1 ? 'B3YOND on-site promoter' : 'B3YOND on-site promoters (' + staff.people + ' people)';
+    lines.push(line(label, staff.personHours, staff.rate, 'person-hour'));
   }
   const selected = new Set(Array.isArray(unit.addons) ? unit.addons : []);
   for (const item of optionalItems) {
     if (!selected.has(item.id)) continue;
     const digital = digitalSetupIds.has(item.id);
-    lines.push(line(item.name, digital ? 1 : days, addonPrice(item.id, unit.type, rates), digital ? 'setup' : 'day'));
+    const rate = addonPrice(item.id, unit.type, rates);
+    const quantity = digital ? 1 : days;
+    const basis = digital ? 'setup' : 'day';
+    const label = item.id === 'printer' && unit.experience === 'aiVideo' ? item.name + ' · video stills' : item.name;
+    lines.push(line(label, quantity, rate, basis));
+    if (addonIncluded(item.id, unit.type)) {
+      lines.push(line('Mirror package credit · ' + item.name, quantity, rate, basis, -1));
+    }
   }
   const complete = !Object.keys(validateUnit(unit)).length && lines.every(item => item.amount !== null);
   return { lines, total: complete ? money(lines.reduce((sum, item) => sum + item.amount, 0)) : null };

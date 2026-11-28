@@ -1,6 +1,6 @@
 import {
-  ADDONS, DELIVERY_OPTIONS, EXPERIENCES, RATE_CARD, SCREEN_SIZES, addonPrice, getBooth,
-  isLongDayOfferEligible, scheduleInfo, transportInfo, validateUnit,
+  ADDONS, DELIVERY_OPTIONS, EXPERIENCES, RATE_CARD, SCREEN_SIZES, addonIncluded, addonPrice, generationInfo, getBooth,
+  isLongDayOfferEligible, scheduleInfo, staffingInfo, transportInfo, validateUnit,
 } from './model.js';
 import { renderVenue, installVenue } from './venue.js';
 
@@ -105,7 +105,7 @@ const previews = {
 };
 const connectivity = {
   frame: 'Capture works offline.',
-  aiPhoto: 'Wi-Fi required · 20 Mbps',
+  aiPhoto: 'Wi-Fi required',
   aiVideo: 'Wi-Fi required',
 };
 
@@ -122,12 +122,17 @@ function preview(item) {
 }
 
 function experienceSection(unit) {
+  const rates = {
+    frame: 'Included in booth hire',
+    aiPhoto: money(RATE_CARD.aiPhotoRate) + ' / photo',
+    aiVideo: money(RATE_CARD.videoRate15Seconds['720p']) + ' at 720p · ' + money(RATE_CARD.videoRate15Seconds['1080p']) + ' at 1080p for 15 seconds',
+  };
   const cards = EXPERIENCES.map(item => '<div class="cfg-experience-card">' + preview(item) +
     '<label class="cfg-experience-option"><input type="radio" name="cfg-experience" data-cfg-field="experience" value="' +
     escape(item.id) + '" aria-describedby="cfg-error-experience"' + (unit.experience === item.id ? ' checked' : '') + '>' +
     '<span class="cfg-choice-text"><strong>' + escape(item.name) +
     '</strong><span>' + escape(item.description) + '</span><span class="cfg-network">' + connectivity[item.id] +
-    '</span><span class="cfg-rate">' + dailyRate(RATE_CARD.experienceDay[item.id]) + '</span></span></label></div>').join('');
+    '</span><span class="cfg-rate">' + rates[item.id] + '</span></span></label></div>').join('');
   return '<section class="cfg-panel" aria-labelledby="cfg-exp-title"><h2 id="cfg-exp-title">Experience</h2><fieldset class="cfg-choice-list"><legend class="cfg-sr">Choose an experience</legend>' +
     cards + '</fieldset>' + errorSlot('experience') + '</section>';
 }
@@ -180,6 +185,80 @@ function eventSection(units, unit) {
     escape(dailyText(unit)) + '</p>' + packageOffer(unit) + reportSection(unit) + '</section>';
 }
 
+const isAi = unit => unit.experience === 'aiPhoto' || unit.experience === 'aiVideo';
+const countLabel = (n, noun) => currency.format(n) + ' ' + noun + (n === 1 ? '' : 's');
+const isBlank = value => value === '' || value == null;
+
+function generationEstimate(unit) {
+  if (!isAi(unit)) return '';
+  const info = generationInfo(unit);
+  const {days, hoursPerDay} = scheduleInfo(unit);
+  const output = unit.experience === 'aiVideo' ? 'video' : 'photo';
+  const hourlyCapacity = 3600 / info.cycleSeconds;
+  const equipment = unit.addons.includes('queue') ? 'with queue management' : 'without queue management';
+  const rows = ['Allow ' + info.cycleSeconds + ' seconds per session ' + equipment + ' (about ' + currency.format(hourlyCapacity) + ' per hour).'];
+  if (info.capacity != null) {
+    rows.push(hourLabel(hoursPerDay) + ' per day × ' + countLabel(days, 'day') + ' gives an estimated maximum of ' + countLabel(info.capacity, output) + ' at this booth.');
+  } else {
+    rows.push('Set the event dates and times to estimate this booth’s capacity.');
+  }
+  if (info.expectedGuests != null && info.capacity != null) {
+    if (info.guestShortfall > 0) {
+      rows.push('At one session per guest, around ' + countLabel(info.guestShortfall, 'guest') + ' may miss a turn. Extend the hours or split attendance across booths.');
+    } else if (info.mode === 'fixed' && info.allocation != null && info.allocation < info.expectedGuests) {
+      rows.push('The allowance covers ' + countLabel(info.allocation, output) + ' for ' + countLabel(info.expectedGuests, 'expected guest') + '.');
+    } else {
+      rows.push('The schedule allows one session for each of the ' + countLabel(info.expectedGuests, 'expected guest') + '.');
+    }
+  }
+  if (info.overCapacity) {
+    rows.push('Lower the reserved quantity to ' + currency.format(info.capacity) + ' or increase this booth’s capacity.');
+  }
+  const plan = info.mode === 'unlimited' ? 'Unlimited' : 'Fixed quantity';
+  const showCost = info.quantity != null && info.unitPrice != null && info.amount != null;
+  const formula = showCost ? countLabel(info.quantity, output) + ' × ' + money(info.unitPrice) + ' = ' + money(info.amount) : money(info.unitPrice) + ' per ' + output;
+  return '<div class="cfg-estimate-head"><strong>' + plan + ' · AI generation</strong><span>' + escape(formula) + '</span></div>' +
+    rows.map(row => '<p>' + escape(row) + '</p>').join('');
+}
+
+function selectField(unit, key, label, choices, initial) {
+  const options = choices.map(([value, name]) => '<option value="' + value + '"' +
+    ((unit[key] ?? initial) === value ? ' selected' : '') + '>' + name + '</option>').join('');
+  return '<div class="cfg-field"><label for="cfg-' + key + '">' + label + '</label><select id="cfg-' + key + '" data-cfg-field="' + key +
+    '" aria-describedby="cfg-error-' + key + '">' + options + '</select>' + errorSlot(key) + '</div>';
+}
+
+function attendanceSection(units, unit) {
+  const ai = isAi(unit);
+  const mode = unit.aiMode ?? 'fixed';
+  const modes = [
+    ['fixed', 'Fixed quantity', 'Reserve a set number of photos or videos.'],
+    ['unlimited', 'Unlimited during event hours', 'Guests can return for more. Pricing uses the full capacity of this booth.'],
+  ].map(([value, label, description]) => '<label class="cfg-staff-choice"><input type="radio" name="cfg-ai-mode" data-cfg-field="aiMode" value="' +
+    value + '" aria-describedby="cfg-error-aiMode"' + (mode === value ? ' checked' : '') + '><span><strong>' + label +
+    '</strong><span class="cfg-hint">' + description + '</span></span></label>').join('');
+  const guestHint = units.length > 1 ? 'Split your expected guests between the booths they will use. Enter this booth’s share across all event days.' :
+    'Enter how many people you expect to use this booth across all event days.';
+  return '<section class="cfg-panel" aria-labelledby="cfg-guest-title"><h2 id="cfg-guest-title">Guests' +
+    '<span data-cfg-ai-heading' + (ai ? '' : ' hidden') + '> &amp; AI pricing</span></h2>' +
+    '<div class="cfg-field cfg-guests"><label for="cfg-expectedGuests">Expected guests at this booth <span class="cfg-optional" data-cfg-guests-optional' +
+    (ai ? ' hidden' : '') + '>(optional)</span></label><input type="number" min="1" step="1" inputmode="numeric" id="cfg-expectedGuests" data-cfg-field="expectedGuests" value="' +
+    escape(unit.expectedGuests) + '" aria-describedby="cfg-guest-hint cfg-error-expectedGuests"' + (ai ? ' required' : '') + '><p id="cfg-guest-hint" class="cfg-hint">' +
+    guestHint + '</p>' + errorSlot('expectedGuests') + '</div>' +
+    '<div class="cfg-generation" data-cfg-generation' + (ai ? '' : ' hidden') + '><div class="cfg-input-grid cfg-video-format" data-cfg-video-format' +
+    (unit.experience === 'aiVideo' ? '' : ' hidden') + '>' +
+    selectField(unit, 'videoResolution', 'Video resolution', [['720p', '720p'], ['1080p', '1080p']], '720p') +
+    selectField(unit, 'videoSeconds', 'Length of each video', [[5, '5 seconds'], [10, '10 seconds'], [15, '15 seconds']], 15) + '</div>' +
+    '<fieldset class="cfg-plan-options"><legend>AI generation plan</legend><div class="cfg-staff-options">' + modes + '</div></fieldset>' + errorSlot('aiMode') +
+    '<div class="cfg-field cfg-allocation" data-cfg-allocation' + (mode === 'unlimited' ? ' hidden' : '') +
+    '><label for="cfg-aiQuantity">Reserved quantity <span class="cfg-optional">(optional)</span></label><input type="number" min="1" step="1" inputmode="numeric" id="cfg-aiQuantity" data-cfg-field="aiQuantity" value="' +
+    escape(unit.aiQuantity) + '" placeholder="' + escape(unit.expectedGuests || 'One per expected guest') + '" aria-describedby="cfg-quantity-hint cfg-error-aiQuantity">' +
+    '<p id="cfg-quantity-hint" class="cfg-hint">Leave blank for one per expected guest. Enter fewer for groups, or more for repeat sessions.</p>' + errorSlot('aiQuantity') + '</div>' +
+    '<label class="cfg-early cfg-plan-queue"><input type="checkbox" data-cfg-field="planQueue"' + (unit.addons.includes('queue') ? ' checked' : '') +
+    '>Include a collection screen with queue management · ' + dailyRate(addonPrice('queue', unit.type)) + '</label>' +
+    '<div class="cfg-estimate" data-cfg-estimate aria-live="polite" aria-atomic="true">' + generationEstimate(unit) + '</div></div></section>';
+}
+
 const addonMedia = {
   printer: ['printer.webp', 'On-site photo printer for guest prints'],
   queue: ['queue-setup.webp', 'Mirror photo booth beside a separate collection touchscreen'],
@@ -191,9 +270,11 @@ function addonRow(unit, item) {
     ? '<span data-cfg-print-note' + (unit.experience === 'aiVideo' ? '' : ' hidden') + '>For AI video, the printer produces a still image.</span>'
     : '';
   const price = addonPrice(item.id, unit.type);
-  const includedDetail = (item.id === 'printer' && unit.type === 'mirror') ? ' · Unlimited still prints' : '';
-  const wifi = ['email', 'qr'].includes(item.id) ? ' · Wi-Fi required for delivery' : '';
-  const rate = dailyRate(price) + includedDetail + wifi;
+  const digital = ['qr', 'email'].includes(item.id);
+  const billing = digital ? money(price) + ' / setup' : dailyRate(price);
+  const inclusion = addonIncluded(item.id, unit.type) ? ' · Included in Mirror hire' : '';
+  const detail = digital ? ' · Wi-Fi required' : item.id === 'printer' && unit.type === 'mirror' ? ' · Unlimited still prints' : '';
+  const rate = billing + inclusion + detail;
   const photo = addonMedia[item.id];
   const visual = photo ? '<img class="cfg-addon-photo" loading="lazy" src="./assets/' + photo[0] + '" alt="' + photo[1] + '">' :
     '<span class="cfg-symbol">' + icon(item.id) + '</span>';
@@ -228,11 +309,47 @@ function addonsSection(unit) {
     rows + '</div>' + errorSlot('addons') + '</section>';
 }
 
+function staffEstimate(unit) {
+  const staff = staffingInfo(unit);
+  const {days} = scheduleInfo(unit);
+  if (!(staff.people > 0)) return '';
+  if (staff.amount == null) return 'Set the event schedule and daily shift to calculate staffing.';
+  return countLabel(staff.people, 'promoter') + ' × ' + hourLabel(staff.hoursPerDay) + ' × ' +
+    countLabel(days, 'day') + ' at ' + money(staff.rate) + ' per person per hour = ' + money(staff.amount) + '.';
+}
+
+function shiftSection(unit) {
+  const staff = staffingInfo(unit);
+  const custom = !isBlank(unit.staffHoursPerDay);
+  const minutes = custom && Number(unit.staffHoursPerDay) > 0 ? Math.round(unit.staffHoursPerDay * 60) : null;
+  const hoursValue = minutes == null ? '' : Math.floor(minutes / 60);
+  const minutesValue = minutes == null ? '' : minutes % 60;
+  return '<div class="cfg-shift" data-cfg-shift' + (staff.people ? '' : ' hidden') + '><strong>Daily promoter shift</strong>' +
+    '<p class="cfg-hint" data-cfg-shift-default>' + shiftDefault(unit) + '</p>' +
+    '<label class="cfg-early"><input type="checkbox" data-cfg-field="customShift"' + (custom ? ' checked' : '') + '>Choose a shorter daily shift</label>' +
+    '<div class="cfg-input-grid cfg-shift-fields" data-cfg-shift-fields' + (custom ? '' : ' hidden') + '>' +
+    '<div class="cfg-field"><label for="cfg-shift-hours">Hours</label><input id="cfg-shift-hours" data-cfg-field="staffHoursPerDay" type="number" min="0" max="23" step="1" inputmode="numeric" value="' +
+    hoursValue + '" placeholder="0" aria-describedby="cfg-error-staffHoursPerDay"></div>' +
+    '<div class="cfg-field"><label for="cfg-shift-minutes">Minutes</label><input id="cfg-shift-minutes" data-cfg-field="staffMinutes" type="number" min="0" max="59" step="1" inputmode="numeric" value="' +
+    minutesValue + '" placeholder="0" aria-describedby="cfg-error-staffHoursPerDay"></div></div>' + errorSlot('staffHoursPerDay') +
+    '<p class="cfg-staff-estimate" aria-live="polite" data-cfg-staff-estimate>' + escape(staffEstimate(unit)) + '</p></div>';
+}
+
+function shiftDefault(unit) {
+  const hours = scheduleInfo(unit).hoursPerDay;
+  const hint = hours ? 'Full event coverage is ' + hourLabel(hours) + ' per promoter per day.' : 'Promoters cover the event hours by default.';
+  if (unit.staffing !== 'b3yond' || isBlank(unit.staffHoursPerDay)) return hint;
+  const shift = staffingInfo(unit).hoursPerDay;
+  return shift != null && hours != null && shift < hours
+    ? hint + ' Your team supplies an on-site promoter for the remaining ' + hourLabel(hours - shift) + ' each day.'
+    : hint;
+}
+
 function staffingSection(unit) {
   const staffing = unit.staffing || 'client';
   const staffOptions = [
     ['client', 'We supply our own promoter', 'No staffing charge'],
-    ['b3yond', 'B3YOND supplies a promoter', dailyRate(RATE_CARD.promoterDay)],
+    ['b3yond', 'B3YOND supplies a promoter', money(RATE_CARD.promoterHour) + ' / hour'],
   ];
   const choices = staffOptions.map(([id, label, price]) => '<label class="cfg-staff-choice"><input type="radio" name="cfg-staffing" data-cfg-field="staffing" value="' +
     id + '" aria-describedby="cfg-error-staffing"' + (staffing === id ? ' checked' : '') + '><span><strong>' + label + '</strong><span class="cfg-rate">' + price + '</span></span></label>').join('');
@@ -243,14 +360,14 @@ function staffingSection(unit) {
     '<fieldset class="cfg-staff-options"><legend class="cfg-sr">On-site promoter</legend>' + choices + '</fieldset>' + errorSlot('staffing') +
     '<div class="cfg-field cfg-extra-staff"><label for="cfg-additionalStaff">Additional B3YOND promoters</label>' +
     '<select id="cfg-additionalStaff" data-cfg-field="additionalStaff" aria-describedby="cfg-promoter-rate cfg-error-additionalStaff">' + extraOptions + '</select>' +
-    '<p class="cfg-hint" id="cfg-promoter-rate">' + money(RATE_CARD.promoterDay) + ' per additional promoter per day.</p>' + errorSlot('additionalStaff') + '</div></section>';
+    '<p class="cfg-hint" id="cfg-promoter-rate">' + money(RATE_CARD.promoterHour) + ' per person per hour.</p>' + errorSlot('additionalStaff') + '</div>' + shiftSection(unit) + '</section>';
 }
 
 export function renderConfig(units, activeId) {
   const unit = units.find(item => item.id === activeId) ?? units[0];
   if (!unit) return '';
   return '<div class="cfg" data-cfg>' + selectUnitTiles(units, unit) + standSizeSection(unit) + experienceSection(unit) + eventSection(units, unit) +
-    deliverySection(unit) + addonsSection(unit) + staffingSection(unit) + '<div class="cfg-sr" role="status" data-cfg-status></div></div>';
+    attendanceSection(units, unit) + deliverySection(unit) + addonsSection(unit) + staffingSection(unit) + '<div class="cfg-sr" role="status" data-cfg-status></div></div>';
 }
 
 function updateErrors(root, unit) {
@@ -323,11 +440,16 @@ export function installConfig(root, { getUnits, getActiveId, setActive, changed 
     const unit = activeUnit();
     if (!unit) return;
     const key = input.dataset.cfgField;
-    // Text controls update the summary while typing. Pickers, checkboxes and radios commit on change.
-    if ((input.type === 'text') !== (event.type === 'input')) return;
+    // Keep numeric fields and estimates live without replacing a focused control.
+    if (['text', 'number'].includes(input.type) !== (event.type === 'input')) return;
+    if (key === 'planQueue') {
+      root.querySelector('[data-cfg-addon][value="queue"]').click();
+      return;
+    }
     if (input.hasAttribute('data-cfg-addon')) {
       unit.addons = [...root.querySelectorAll('[data-cfg-addon]:checked')].map(el => el.value);
       const hasScreen = unit.addons.includes('queue');
+      root.querySelector('[data-cfg-field="planQueue"]').checked = hasScreen;
       root.querySelector('[data-cfg-email-tip]').hidden = !unit.addons.includes('email');
       root.querySelector('[data-cfg-add-screen]').hidden = hasScreen;
       root.querySelector('[data-cfg-screen-selected]').hidden = !hasScreen;
@@ -346,10 +468,23 @@ export function installConfig(root, { getUnits, getActiveId, setActive, changed 
       }
       unit.startDate = input.value;
       root.querySelector('[data-cfg-field="endDate"]').min = input.value;
+    } else if (key === 'customShift') {
+      unit.staffHoursPerDay = input.checked ? 0 : '';
+      root.querySelector('#cfg-shift-hours').value = '';
+      root.querySelector('#cfg-shift-minutes').value = '';
+      root.querySelector('[data-cfg-shift-fields]').hidden = !input.checked;
+      if (input.checked) root.querySelector('#cfg-shift-hours').focus();
+    } else if (key === 'staffHoursPerDay' || key === 'staffMinutes') {
+      const hoursInput = root.querySelector('#cfg-shift-hours');
+      const minutesInput = root.querySelector('#cfg-shift-minutes');
+      unit.staffHoursPerDay = hoursInput.validity.valid && minutesInput.validity.valid
+        ? Number(hoursInput.value) + Number(minutesInput.value) / 60 : -1;
     } else if (key === 'longDayOffer') {
       unit.longDayOffer = input.checked && isLongDayOfferEligible(unit);
     } else {
-      unit[key] = ['reportDayOffset', 'screenSize', 'additionalStaff'].includes(key) ? Number(input.value) : input.value;
+      const numeric = ['reportDayOffset', 'screenSize', 'additionalStaff', 'expectedGuests', 'aiQuantity', 'videoSeconds'].includes(key);
+      unit[key] = numeric && input.value !== '' ? Number(input.value) : input.value;
+      if (numeric && input.validity.badInput) unit[key] = -1;
       if (key === 'experience') {
         root.querySelector('[data-cfg-print-note]').hidden = unit.experience !== 'aiVideo';
       }
@@ -367,6 +502,20 @@ export function installConfig(root, { getUnits, getActiveId, setActive, changed 
     root.querySelector('[data-cfg-arrival]').textContent = arrivalText(unit);
     root.querySelector('[data-cfg-duration]').textContent = dailyText(unit);
     root.querySelector('[data-cfg-earlycharge]').textContent = earlyChargeText(unit);
+    const ai = isAi(unit);
+    root.querySelector('[data-cfg-generation]').hidden = !ai;
+    root.querySelector('[data-cfg-ai-heading]').hidden = !ai;
+    root.querySelector('[data-cfg-guests-optional]').hidden = ai;
+    root.querySelector('#cfg-expectedGuests').required = ai;
+    root.querySelector('[data-cfg-video-format]').hidden = unit.experience !== 'aiVideo';
+    root.querySelector('[data-cfg-allocation]').hidden = unit.aiMode === 'unlimited';
+    root.querySelector('#cfg-aiQuantity').placeholder = unit.expectedGuests > 0 ? String(unit.expectedGuests) : 'One per expected guest';
+    const estimate = root.querySelector('[data-cfg-estimate]');
+    const estimateMarkup = generationEstimate(unit);
+    if (estimate.innerHTML !== estimateMarkup) estimate.innerHTML = estimateMarkup;
+    root.querySelector('[data-cfg-shift]').hidden = !staffingInfo(unit).people;
+    root.querySelector('[data-cfg-shift-default]').textContent = shiftDefault(unit);
+    root.querySelector('[data-cfg-staff-estimate]').textContent = staffEstimate(unit);
     if (root.querySelector('[data-cfg-validated]')) updateErrors(root, unit);
     changed({render: false});
   }
