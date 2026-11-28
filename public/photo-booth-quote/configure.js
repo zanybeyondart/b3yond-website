@@ -1,6 +1,6 @@
 import {
   ADDONS, DELIVERY_OPTIONS, EXPERIENCES, RATE_CARD, SCREEN_SIZES, VIDEO_RESOLUTIONS, VIDEO_SECONDS, addonIncluded, addonPrice, artworkPricing, boothHireRate, generationInfo, getBooth,
-  isLongDayOfferEligible, scheduleInfo, staffingInfo, transportInfo, validateUnit,
+  isLongDayOfferEligible, scheduleInfo, staffingInfo, transportAtVenue, validateUnit,
 } from './model.js';
 import { renderVenue, installVenue } from './venue.js';
 
@@ -205,12 +205,13 @@ function reportSection(unit) {
     '</div>' + field(unit, 'reportTime', 'Reporting time', 'time') + '</div></div></div>';
 }
 
-function transportLabel(unit) {
+function transportLabel(unit, units) {
   if (!unit.venue.trim()) return '';
-  const {emirate, rate} = transportInfo(unit);
-  const area = emirate ? ' to ' + emirate : '';
-  return rate == null ? 'Transport' + area + ' · Rate to be confirmed.' :
-    'Transport' + area + ' · ' + (rate === 0 ? 'Included' : money(rate) + ' per venue per event day.');
+  const {emirate, rate, amount} = transportAtVenue(unit, units);
+  const title = emirate ? 'Transport to ' + emirate : 'Transport';
+  if (rate === null) return title + ' · Rate to be confirmed.';
+  if (rate === 0) return title + ' · Included';
+  return title + ' · ' + (amount === null ? 'From ' + money(rate) : money(amount) + ' for this venue');
 }
 
 function packageOffer(unit) {
@@ -226,7 +227,7 @@ function eventSection(units, unit) {
   return '<section class="cfg-panel" aria-labelledby="cfg-event-title"><h2 class="cfg-sr" id="cfg-event-title">Event details</h2>' + copy +
     '<p class="cfg-hire-rate"><strong data-cfg-hire-rate>' + money(boothHireRate(unit)) + '</strong> covers the first ' + RATE_CARD.includedHours +
     ' hours each day. Additional time is ' + money(RATE_CARD.overtimeHour) + ' per hour.</p>' +
-    renderVenue(unit) + '<p class="cfg-transport" data-cfg-transport>' + escape(transportLabel(unit)) + '</p>' +
+    renderVenue(unit) + '<p class="cfg-transport" data-cfg-transport>' + escape(transportLabel(unit, units)) + '</p>' +
     '<div class="cfg-input-grid">' + field(unit, 'startDate', 'Start date', 'date') +
     field(unit, 'endDate', 'End date', 'date', unit.startDate ? 'min="' + escape(unit.startDate) + '"' : '') + '</div><div class="cfg-input-grid">' +
     field(unit, 'startTime', 'Daily start time', 'time') + field(unit, 'endTime', 'Daily end time', 'time') + '</div><p class="cfg-duration" data-cfg-duration>' +
@@ -608,11 +609,13 @@ export function installConfig(root, { getUnits, getActiveId, setActive, getArtwo
       }
       if (key === 'venue') {
         unit.venueEmirate = '';
-        root.querySelector('[data-cfg-transport]').textContent = transportLabel(unit);
       }
     }
     const part = Number(input.closest('[data-cfg]').dataset.cfgPart);
     if (part === 1) {
+      if (['venue', 'startDate', 'endDate'].includes(key)) {
+        root.querySelector('[data-cfg-transport]').textContent = transportLabel(unit, getUnits());
+      }
       const eligible = isLongDayOfferEligible(unit);
       root.querySelector('[data-cfg-package]').hidden = !eligible;
       if (!eligible && unit.longDayOffer) {

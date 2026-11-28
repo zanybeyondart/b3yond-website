@@ -379,25 +379,38 @@ function transportLines(units, rates) {
   }
 
   return Array.from(byEmirate, ([emirate, group]) => {
-    const days = group.incomplete ? null : mergedVenueDays(group.venues);
+    const days = group.incomplete ? null : transportDaysAtVenues(group.venues);
     const amount = days === null || group.rate === null ? null : money(days * group.rate);
     return { emirate, days, rate: group.rate, amount };
   });
 }
 
-function mergedVenueDays(venues) {
+function transportDaysAtVenues(venues) {
   let days = 0;
   for (const intervals of venues.values()) {
     intervals.sort(([a], [b]) => a - b);
-    let coveredThrough = -Infinity;
-    for (const [first, last] of intervals) {
-      if (last <= coveredThrough) continue;
-      const firstNewDay = Math.max(first, coveredThrough + DAY_MS);
-      days += 1 + (last - firstNewDay) / DAY_MS;
-      coveredThrough = last;
+    let [runStart, runEnd] = intervals[0];
+    for (let i = 1; i < intervals.length; i++) {
+      const [first, last] = intervals[i];
+      if (first > runEnd + DAY_MS) {
+        days += runStart === runEnd ? 1 : 2;
+        runStart = first;
+      }
+      runEnd = Math.max(runEnd, last);
     }
+    // Delivery and collection share one transport charge on a single-day booking.
+    days += runStart === runEnd ? 1 : 2;
   }
   return days;
+}
+
+export function transportAtVenue(unit, units, rates = RATE_CARD) {
+  const venue = normalizedVenue(unit.venue);
+  const {emirate} = transportInfo(unit, rates);
+  const sameVenue = units.filter(other =>
+    normalizedVenue(other.venue) === venue && transportInfo(other, rates).emirate === emirate
+  );
+  return transportLines(sameVenue, rates)[0];
 }
 
 export function artworkPricing(count = 2, rates = RATE_CARD) {
