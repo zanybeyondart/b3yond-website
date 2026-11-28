@@ -32,7 +32,11 @@ function restore() {
     const saved = JSON.parse(localStorage.getItem(key) || 'null');
     if (!saved || !Array.isArray(saved.units)) return empty();
     const units = saved.units.filter(u => u && typeof u.id === 'string' && getBooth(u.type))
-      .map(u => ({...createUnit(u.type,u.id),...u,addons:Array.isArray(u.addons) ? u.addons : []}));
+      .map(u => {
+        const unit = {...createUnit(u.type,u.id),...u,addons:Array.isArray(u.addons) ? u.addons : []};
+        delete unit.aiQuantity;
+        return unit;
+      });
     const step = units.length ? (saved.step === 3 && units.every(isComplete) ? 3 : saved.step >= 2 ? 2 : 1) : 1;
     return {units,step,activeId:units.find(u => u.id === saved.activeId)?.id || units[0]?.id || null};
   } catch { return empty(); }

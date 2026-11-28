@@ -58,7 +58,7 @@ export function createUnit(type, id = globalThis.crypto.randomUUID()) {
     reportTime: '', reportDayOffset: 0, addons: type === 'mirror' ? ['printer', 'email'] : [],
     screenSide: 'either', screenSize: 24, venueEmirate: '', longDayOffer: false,
     staffing: 'client', additionalStaff: 0, staffHoursPerDay: '',
-    expectedGuests: '', aiMode: 'fixed', aiQuantity: '', videoResolution: '720p', videoSeconds: 15,
+    expectedGuests: '', aiMode: 'fixed', videoResolution: '720p', videoSeconds: 15,
   };
 }
 
@@ -164,7 +164,6 @@ export function generationInfo(unit, rates = RATE_CARD) {
   const ai = unit.experience === 'aiPhoto' || unit.experience === 'aiVideo';
   const mode = unit.aiMode ?? 'fixed';
   const expectedGuests = positiveCount(unit.expectedGuests);
-  const allocation = blank(unit.aiQuantity) ? expectedGuests : positiveCount(unit.aiQuantity);
   const addons = Array.isArray(unit.addons) ? unit.addons : [];
   const cycleSeconds = addons.includes('queue') ? 20 : 45;
   const photoWithPrint = unit.experience === 'aiPhoto' && addons.includes('printer');
@@ -173,7 +172,7 @@ export function generationInfo(unit, rates = RATE_CARD) {
   const sessionSeconds = hoursPerDay === null ? null : Math.round(hoursPerDay * 60) * 60;
   const capacityPerDay = sessionSeconds === null ? null : Math.floor(sessionSeconds / cycleSeconds);
   const capacity = days === null || capacityPerDay === null ? null : capacityPerDay * days;
-  const quantity = !ai ? null : mode === 'fixed' ? allocation : mode === 'unlimited' ? capacity : null;
+  const quantity = !ai ? null : mode === 'fixed' ? expectedGuests : mode === 'unlimited' ? capacity : null;
   let unitPrice = null;
   if (unit.experience === 'aiPhoto') {
     const rate = photoWithPrint ? rates.aiPhotoPrintRate : rates.aiPhotoRate;
@@ -188,9 +187,9 @@ export function generationInfo(unit, rates = RATE_CARD) {
     }
   }
   const amount = quantity === null || unitPrice === null ? null : money(quantity * unitPrice);
-  const overCapacity = mode === 'fixed' && capacity !== null && allocation !== null && allocation > capacity;
   const guestShortfall = expectedGuests === null || capacity === null ? null : Math.max(0, expectedGuests - capacity);
-  return { mode, expectedGuests, allocation, cycleSeconds, capacityPerDay, capacity, quantity, unitPrice, amount, overCapacity, guestShortfall, photoWithPrint };
+  const overCapacity = ai && mode === 'fixed' && guestShortfall > 0;
+  return { mode, expectedGuests, cycleSeconds, capacityPerDay, capacity, quantity, unitPrice, amount, overCapacity, guestShortfall, photoWithPrint };
 }
 
 export function staffingInfo(unit, rates = RATE_CARD) {
@@ -232,10 +231,10 @@ export function validateUnit(unit) {
   if (ai) {
     const generation = generationInfo(unit);
     if (!['fixed', 'unlimited'].includes(generation.mode)) errors.aiMode = 'Choose a generation plan.';
-    if (generation.mode === 'fixed' && !blank(unit.aiQuantity) && generation.allocation === null) {
-      errors.aiQuantity = 'Enter a positive whole number of generations.';
-    } else if (generation.overCapacity) {
-      errors.aiQuantity = 'This booth can serve up to ' + generation.capacity.toLocaleString('en-AE') + ' generations during this schedule. Reduce the allocation, enable queue management, extend the event, or split guests between booths.';
+    if (generation.overCapacity) {
+      const hasQueue = Array.isArray(unit.addons) && unit.addons.includes('queue');
+      const options = hasQueue ? 'Extend the event or divide guests between booths.' : 'Add queue management, extend the event, or divide guests between booths.';
+      errors.expectedGuests = 'This booth can serve up to ' + generation.capacity.toLocaleString('en-AE') + ' guests during the booked hours. ' + options;
     }
     if (unit.experience === 'aiVideo') {
       if (!VIDEO_RESOLUTIONS.includes(unit.videoResolution ?? '720p')) errors.videoResolution = 'Choose 720p or 1080p.';
@@ -319,7 +318,7 @@ export function priceUnit(unit, rates = RATE_CARD) {
     const format = video
       ? ' (' + (unit.videoResolution ?? '720p') + ', ' + (unit.videoSeconds ?? 15) + 's)'
       : (generation.photoWithPrint ? ' + one print' : ' (digital only)');
-    const plan = generation.mode === 'unlimited' ? 'unlimited during booked hours' : 'fixed allocation';
+    const plan = generation.mode === 'unlimited' ? 'unlimited during booked hours' : 'one per expected guest';
     lines.push(line(experience.name + format + ' · ' + plan, generation.quantity, generation.unitPrice, video ? 'video' : 'photo'));
   }
 
