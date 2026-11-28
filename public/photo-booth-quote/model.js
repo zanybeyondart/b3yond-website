@@ -37,21 +37,27 @@ const digitalSetupIds = new Set(['qr', 'email']);
 export const RATE_CARD = {
   currency: 'AED',
   includedHours: 3,
-  boothDay: { mirror: 2100, classic: 1650, grand: 2400 },
+  boothDay: { mirror: 1800, classic: 1400, grand: 2400 },
   displaySizePremiumDay: { 24: 0, 27: 100, 32: 200 },
   aiPhotoRate: 0.50,
   aiPhotoPrintRate: 1.50,
   customArtworkSetup: 350,
   customArtworkExtraPair: 250,
   videoRate10Seconds: { '720p': 6, '1080p': 12 },
-  overtimeHour: 400,
+  overtimeHour: 250,
+  fullDay8: { mirror: 2800, classic: 2350, grand: 3400 },
+  fullDay12: { mirror: 3400, classic: 2950, grand: 4000 },
+  extendedDayHour: 150,
+  repeatDayDiscount: 0.15,
+  flexibleMultiplier: 1.25,
+  autoQuoteDayLimit: 6000,
+  videoUsageDayLimit: 3000,
   earlySetupHour: 100,
   addonDay: { queue: 500, stanchions: 150, printer: 350, props: 0 },
   displayPrinterDay: 200,
   deliverySetup: { qr: 100, email: 150 },
   promoterHour: 75,
   transportDay: { Ajman: 150, Sharjah: 175, Dubai: 200, 'Abu Dhabi': 500 },
-  longDayDiscountDay: 1600,
 };
 
 export function createUnit(type, id = globalThis.crypto.randomUUID()) {
@@ -61,7 +67,7 @@ export function createUnit(type, id = globalThis.crypto.randomUUID()) {
     reportTime: '', reportDayOffset: 0, addons: type === 'mirror' ? ['printer', 'email'] : [],
     screenSide: 'either', screenSize: 24, venueEmirate: '', longDayOffer: false,
     staffing: 'client', additionalStaff: 0, staffHoursPerDay: '',
-    expectedGuests: '', aiMode: 'fixed', customArtwork: false, videoResolution: '720p', videoSeconds: 15,
+    expectedGuests: '', aiMode: 'fixed', customArtwork: false, videoResolution: '720p', videoSeconds: 10,
   };
 }
 
@@ -175,7 +181,9 @@ export function generationInfo(unit, rates = RATE_CARD) {
   const sessionSeconds = hoursPerDay === null ? null : Math.round(hoursPerDay * 60) * 60;
   const capacityPerDay = sessionSeconds === null ? null : Math.floor(sessionSeconds / cycleSeconds);
   const capacity = days === null || capacityPerDay === null ? null : capacityPerDay * days;
-  const quantity = !ai ? null : mode === 'fixed' ? expectedGuests : mode === 'unlimited' ? capacity : null;
+  const allowance = expectedGuests === null ? null : Math.ceil(expectedGuests * rates.flexibleMultiplier);
+  const quantity = !ai ? null : mode === 'fixed' ? expectedGuests :
+    mode === 'unlimited' && capacity !== null && allowance !== null ? Math.min(capacity, allowance) : null;
   let unitPrice = null;
   if (unit.experience === 'aiPhoto') {
     const rate = photoWithPrint ? rates.aiPhotoPrintRate : rates.aiPhotoRate;
@@ -271,9 +279,22 @@ function validRate(value) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
-export function isLongDayOfferEligible(unit) {
-  const { days, hoursPerDay } = scheduleInfo(unit);
-  return unit.type === 'mirror' && days === 4 && hoursPerDay === 12;
+export function hirePricing(unit, rates = RATE_CARD) {
+  const {days, hoursPerDay} = scheduleInfo(unit);
+  const base = boothHireRate(unit, rates);
+  const premium = unit.type === 'classic' ? (rates.displaySizePremiumDay?.[unit.screenSize ?? 24] ?? 0) : 0;
+  const cap8 = rates.fullDay8?.[unit.type];
+  const cap12 = rates.fullDay12?.[unit.type];
+  if (base === null || hoursPerDay === null || !validRate(cap8) || !validRate(cap12)) {
+    return {daily:null, discount:null, total:null};
+  }
+  let daily;
+  if (hoursPerDay <= 8) daily = Math.min(base + Math.max(0, hoursPerDay - rates.includedHours) * rates.overtimeHour, cap8 + premium);
+  else if (hoursPerDay <= 12) daily = cap8 + premium + (hoursPerDay - 8) * rates.extendedDayHour;
+  else daily = cap12 + premium + (hoursPerDay - 12) * rates.overtimeHour;
+  daily = money(daily);
+  const discount = days === null ? null : money(daily * Math.max(0, days - 1) * rates.repeatDayDiscount);
+  return {daily, discount, total:days === null ? null : money(daily * days - discount)};
 }
 
 export function boothHireRate(unit, rates = RATE_CARD) {
@@ -310,9 +331,11 @@ export function priceUnit(unit, rates = RATE_CARD) {
   const booth = getBooth(unit.type);
   const experience = EXPERIENCES.find(item => item.id === unit.experience);
   const hireLabel = unit.type === 'classic' ? 'Display Stand (' + (unit.screenSize ?? 24) + '″)' : booth?.name || 'Booth hire';
-  const lines = [
-    line(hireLabel, days, boothHireRate(unit, rates), 'day'),
-  ];
+  const hire = hirePricing(unit, rates);
+  const lines = [line(hireLabel + ' · booked-hours package', days, hire.daily, 'day')];
+  if (hire.discount > 0) {
+    lines.push(line('Multi-day hire saving · 15% from day two', 1, hire.discount, 'booking', -1));
+  }
   if (experience?.id === 'frame') {
     lines.push(line('Branded frame', 1, 0, 'setup'));
   } else if (experience) {
@@ -321,18 +344,10 @@ export function priceUnit(unit, rates = RATE_CARD) {
     const format = video
       ? ' (' + (unit.videoResolution ?? '720p') + ', ' + (unit.videoSeconds ?? 15) + 's)'
       : (generation.photoWithPrint ? ' + one print' : ' (digital only)');
-    const plan = generation.mode === 'unlimited' ? 'unlimited during booked hours' : 'based on estimated attendance';
+    const plan = generation.mode === 'unlimited' ? 'flexible session allowance' : 'based on estimated attendance';
     lines.push(line(experience.name + format + ' · ' + plan, generation.quantity, generation.unitPrice, video ? 'video' : 'photo'));
   }
 
-  const overtime = hoursPerDay !== null && validRate(rates.includedHours)
-    ? Math.max(0, hoursPerDay - rates.includedHours) : null;
-  if (overtime !== 0 && rates.overtimeHour !== 0) {
-    lines.push(line('Additional event hours', days !== null && overtime !== null ? days * overtime : null, rates.overtimeHour, 'hour'));
-  }
-  if (unit.longDayOffer === true && isLongDayOfferEligible(unit)) {
-    lines.push(line('Four-day Mirror Booth offer', days, rates.longDayDiscountDay, 'day', -1));
-  }
   if (unit.earlySetup) {
     lines.push(line('Earlier reporting', days !== null && earlyHoursPerDay !== null ? days * earlyHoursPerDay : null, rates.earlySetupHour, 'hour'));
   }
@@ -358,7 +373,14 @@ export function priceUnit(unit, rates = RATE_CARD) {
     lines.push(line(label, quantity, rate, basis));
   }
   const complete = !Object.keys(validateUnit(unit)).length && lines.every(item => item.amount !== null);
-  return { lines, total: complete ? money(lines.reduce((sum, item) => sum + item.amount, 0)) : null };
+  const total = complete ? money(lines.reduce((sum, item) => sum + item.amount, 0)) : null;
+  const generation = generationInfo(unit, rates);
+  const knownTotal = money(lines.reduce((sum, item) => sum + (item.amount ?? 0), 0));
+  const requiresReview = days !== null && (
+    (knownTotal > days * rates.autoQuoteDayLimit) ||
+    (unit.experience === 'aiVideo' && generation.amount !== null && generation.amount > days * rates.videoUsageDayLimit)
+  );
+  return {lines, total, requiresReview};
 }
 
 function transportLines(units, rates) {
@@ -443,12 +465,16 @@ export function priceQuote(units, rates = RATE_CARD, artworkCount = 2) {
   const travelTotal = travelPending ? null : money(travelLines.reduce((sum, item) => sum + item.amount, 0));
   const bookingTotal = bookingLines.some(item => item.amount === null) ? null : money(bookingLines.reduce((sum, item) => sum + item.amount, 0));
   const total = subtotal === null || travelTotal === null || bookingTotal === null ? null : money(subtotal + bookingTotal + travelTotal);
-  return { units: results, subtotal, bookingLines, travelDays, travelTotal, travelLines, travelPending, total };
+  const boothDays = units.reduce((sum, unit) => sum + (scheduleInfo(unit).days ?? 0), 0);
+  const knownTotal = (subtotal ?? 0) + (bookingTotal ?? 0) + (travelTotal ?? 0);
+  const requiresReview = results.some(result => result.requiresReview) ||
+    (boothDays > 0 && knownTotal > rates.autoQuoteDayLimit * boothDays);
+  return { pricingPolicyVersion: 2, requiresReview, units: results, subtotal, bookingLines, travelDays, travelTotal, travelLines, travelPending, total };
 }
 
 export function quoteEstimate(units, rates = RATE_CARD, artworkCount = 2) {
   const quote = priceQuote(units, rates, artworkCount);
-  const estimate = { amount: quote.total, assumedDays: false, transportPending: quote.travelPending, incomplete: quote.total === null };
+  const estimate = { requiresReview: quote.requiresReview, amount: quote.total, assumedDays: false, transportPending: quote.travelPending, incomplete: quote.total === null };
   if (!estimate.incomplete || !units.length) return estimate;
 
   let amount = quote.bookingLines.reduce((sum, item) => sum + (item.amount ?? 0), 0);
@@ -463,6 +489,7 @@ export function quoteEstimate(units, rates = RATE_CARD, artworkCount = 2) {
     } else if (normalizedVenue(unit.venue)) {
       scheduledVenues.push(unit);
     }
+    estimate.requiresReview ||= result.requiresReview;
     for (const item of result.lines) amount += item.amount ?? 0;
   });
   // Unscheduled booths must neither create travel charges nor hide scheduled ones at the same venue.
@@ -470,3 +497,4 @@ export function quoteEstimate(units, rates = RATE_CARD, artworkCount = 2) {
   estimate.amount = money(amount);
   return estimate;
 }
+

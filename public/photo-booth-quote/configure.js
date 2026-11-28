@@ -1,6 +1,6 @@
 import {
   ADDONS, DELIVERY_OPTIONS, EXPERIENCES, RATE_CARD, SCREEN_SIZES, VIDEO_RESOLUTIONS, VIDEO_SECONDS, addonIncluded, addonPrice, artworkPricing, boothHireRate, generationInfo, getBooth,
-  isLongDayOfferEligible, scheduleInfo, staffingInfo, transportAtVenue, validateUnit,
+  hirePricing, scheduleInfo, staffingInfo, transportAtVenue, validateUnit,
 } from './model.js';
 import { renderVenue, installVenue } from './venue.js';
 
@@ -80,9 +80,7 @@ function dailyText(unit) {
   if (hoursPerDay) labels.push(hourLabel(hoursPerDay) + ' per day');
   if (hoursPerDay && unit.endTime < unit.startTime) labels.push('ends the following day');
   if (hoursPerDay) {
-    const overtime = Math.max(0, hoursPerDay - RATE_CARD.includedHours) * RATE_CARD.overtimeHour;
-    const discount = unit.longDayOffer && isLongDayOfferEligible(unit) ? RATE_CARD.longDayDiscountDay : 0;
-    labels.push(money(boothHireRate(unit) + overtime - discount) + ' daily booth hire');
+    labels.push(money(hirePricing(unit).daily) + ' daily hire before multi-day saving');
   }
   return labels.length ? labels.join(' · ') : '';
 }
@@ -182,7 +180,7 @@ function outputOptions(unit, artworkCount) {
     '<div class="cfg-output-options" data-cfg-video-format' + (unit.experience === 'aiVideo' ? '' : ' hidden') +
     '><div class="cfg-video-settings"><fieldset class="cfg-plan-options"><legend>Video resolution</legend><div class="cfg-format-choices">' +
     resolutions + '</div>' + errorSlot('videoResolution') + '</fieldset>' +
-    selectField(unit, 'videoSeconds', 'Length of each video', VIDEO_SECONDS.map(seconds => [seconds, seconds + ' seconds']), 15) +
+    selectField(unit, 'videoSeconds', 'Length of each video', VIDEO_SECONDS.map(seconds => [seconds, seconds + ' seconds']), 10) +
     '</div></div>';
 }
 
@@ -214,11 +212,8 @@ function transportLabel(unit, units) {
   return title + ' · ' + (amount === null ? 'From ' + money(rate) : money(amount) + ' for this venue');
 }
 
-function packageOffer(unit) {
-  const regular = RATE_CARD.boothDay.mirror + (12 - RATE_CARD.includedHours) * RATE_CARD.overtimeHour;
-  return '<div class="cfg-package" data-cfg-package' + (isLongDayOfferEligible(unit) ? '' : ' hidden') + '>' +
-    '<label class="cfg-early"><input type="checkbox" data-cfg-field="longDayOffer"' + (unit.longDayOffer && isLongDayOfferEligible(unit) ? ' checked' : '') +
-    '>Use the four-day Mirror package</label><p>' + money(regular - RATE_CARD.longDayDiscountDay) + ' per 12-hour day, saving ' + money(RATE_CARD.longDayDiscountDay) + ' per day.</p></div>';
+function packageOffer() {
+  return '<p class="cfg-hint">Full-day caps apply automatically. Day two onward gets 15% off booth hire.</p>';
 }
 
 function eventSection(units, unit) {
@@ -226,7 +221,7 @@ function eventSection(units, unit) {
   const copy = source ? '<button type="button" class="cfg-copy" data-cfg-copy>' + icon('copy') + 'Copy details from ' + escape(unitLabel(units, source)) + '</button>' : '';
   return '<section class="cfg-panel" aria-labelledby="cfg-event-title"><h2 class="cfg-sr" id="cfg-event-title">Event details</h2>' + copy +
     '<p class="cfg-hire-rate"><strong data-cfg-hire-rate>' + money(boothHireRate(unit)) + '</strong> covers the first ' + RATE_CARD.includedHours +
-    ' hours each day. Additional time is ' + money(RATE_CARD.overtimeHour) + ' per hour.</p>' +
+    ' hours each day. Eight- and twelve-hour packages cap longer bookings.</p>' +
     renderVenue(unit) + '<p class="cfg-transport" data-cfg-transport>' + escape(transportLabel(unit, units)) + '</p>' +
     '<div class="cfg-input-grid">' + field(unit, 'startDate', 'Start date', 'date') +
     field(unit, 'endDate', 'End date', 'date', unit.startDate ? 'min="' + escape(unit.startDate) + '"' : '') + '</div><div class="cfg-input-grid">' +
@@ -247,7 +242,7 @@ function generationEstimate(unit) {
     countLabel(info.quantity, output) + ' × ' + money(info.unitPrice) + ' = ' + money(info.amount);
   const capacity = info.capacity == null ? 'Capacity depends on the event schedule' :
     'Estimated capacity ' + countLabel(info.capacity, 'session');
-  return '<span>' + escape(capacity) + '</span><strong>' + escape(formula) + '</strong>';
+  return '<span>' + escape(capacity) + '</span><strong>' + escape(formula) + '</strong>' + (info.mode === 'unlimited' ? '<p class="cfg-hint">Up to ' + (info.quantity == null ? 'an agreed number of' : currency.format(info.quantity)) + ' sessions across this booking. Further usage requires approval at the selected rate.</p>' : '');
 }
 
 function selectField(unit, key, label, choices, initial) {
@@ -275,7 +270,7 @@ function attendanceSection(units, unit) {
   const queuedCycle = generationInfo({...unit, addons: ['queue']}).cycleSeconds;
   const modes = [
     ['fixed', 'One per guest', 'Priced using the guest count you enter.'],
-    ['unlimited', 'Unlimited', 'Priced using booth capacity during event hours.'],
+    ['unlimited', 'Flexible sessions', 'Up to 125% of your guest count, within booth capacity.'],
   ].map(([value, label, description]) => '<label class="cfg-staff-choice"><input type="radio" name="cfg-ai-mode" data-cfg-field="aiMode" value="' +
     value + '" aria-describedby="cfg-error-aiMode"' + (mode === value ? ' checked' : '') + '><span><strong>' + label +
     '</strong><span class="cfg-hint">' + description + '</span></span></label>').join('');
@@ -539,7 +534,6 @@ export function installConfig(root, { getUnits, getActiveId, setActive, getArtwo
       for (const key of ['venue', 'venueEmirate', 'startDate', 'endDate', 'startTime', 'endTime', 'earlySetup', 'reportTime', 'reportDayOffset']) {
         unit[key] = source[key];
       }
-      if (!isLongDayOfferEligible(unit)) unit.longDayOffer = false;
       changed({render: true});
       root.querySelector('[data-cfg-copy]')?.focus();
       const status = root.querySelector('[data-cfg-status]');
@@ -592,8 +586,7 @@ export function installConfig(root, { getUnits, getActiveId, setActive, getArtwo
       const minutesInput = root.querySelector('#cfg-shift-minutes');
       unit.staffHoursPerDay = hoursInput.validity.valid && minutesInput.validity.valid
         ? Number(hoursInput.value) + Number(minutesInput.value) / 60 : -1;
-    } else if (key === 'longDayOffer') {
-      unit.longDayOffer = input.checked && isLongDayOfferEligible(unit);
+
     } else {
       const numeric = ['reportDayOffset', 'screenSize', 'additionalStaff', 'expectedGuests', 'videoSeconds'].includes(key);
       unit[key] = numeric && input.value !== '' ? Number(input.value) : input.value;
@@ -615,12 +608,6 @@ export function installConfig(root, { getUnits, getActiveId, setActive, getArtwo
     if (part === 1) {
       if (['venue', 'startDate', 'endDate'].includes(key)) {
         root.querySelector('[data-cfg-transport]').textContent = transportLabel(unit, getUnits());
-      }
-      const eligible = isLongDayOfferEligible(unit);
-      root.querySelector('[data-cfg-package]').hidden = !eligible;
-      if (!eligible && unit.longDayOffer) {
-        unit.longDayOffer = false;
-        root.querySelector('[data-cfg-field="longDayOffer"]').checked = false;
       }
       root.querySelector('[data-cfg-arrival]').textContent = arrivalText(unit);
       root.querySelector('[data-cfg-duration]').textContent = dailyText(unit);
@@ -645,3 +632,4 @@ export function installConfig(root, { getUnits, getActiveId, setActive, getArtwo
   root.addEventListener('input', edit);
   root.addEventListener('change', edit);
 }
+

@@ -90,7 +90,7 @@ const server=http.createServer(async(req,res)=>{
     const before=url.searchParams.get('before')||'9999';
     const records=db.prepare('SELECT id,created_at,updated_at,name,email,payload FROM quotes WHERE created_at < ? ORDER BY created_at DESC LIMIT 51').all(before);
     const more=records.length>50,rows=records.slice(0,50);
-    return json(res,200,{quotes:rows.map(row=>{const p=JSON.parse(row.payload);return {id:row.id,createdAt:row.created_at,updatedAt:row.updated_at,name:row.name,email:row.email,total:p.quote.total??p.estimate.amount,pending:p.quote.total===null,venue:p.units.map(u=>u.venue).join(' · '),date:p.units[0]?.startDate,booths:p.units.length};}),next:more?rows.at(-1).created_at:null});
+    return json(res,200,{quotes:rows.map(row=>{const p=JSON.parse(row.payload);return {id:row.id,createdAt:row.created_at,updatedAt:row.updated_at,name:row.name,email:row.email,total:p.quote.total??p.estimate.amount,pending:p.quote.total===null,requiresReview:Boolean(p.quote.requiresReview),venue:p.units.map(u=>u.venue).join(' · '),date:p.units[0]?.startDate,booths:p.units.length};}),next:more?rows.at(-1).created_at:null});
    }
    if(req.method==='GET'&& /^\/api\/quotes\/[a-f0-9]{24}$/.test(path)){
     const row=db.prepare('SELECT id,created_at,updated_at,payload FROM quotes WHERE id=?').get(path.split('/').at(-1));
@@ -107,3 +107,4 @@ const server=http.createServer(async(req,res)=>{
  }catch(error){json(res,error.code==='ENOENT'?404:400,{error:error.code==='ENOENT'?'Not found':path.startsWith('/api/')?error.message:'Unable to load page'});}
 });
 server.listen(Number(process.env.PORT)||8080,'0.0.0.0');
+

@@ -92,7 +92,7 @@ function details(unit, includeHeader) {
   return rows;
 }
 
-function productionPlan(unit) {
+function productionPlan(unit, savedResult = null) {
   if (!['aiPhoto', 'aiVideo'].includes(unit.experience)) return '';
   const ai = generationInfo(unit);
   const schedule = scheduleInfo(unit);
@@ -101,7 +101,10 @@ function productionPlan(unit) {
   const format = video
     ? (unit.videoResolution || '720p') + ', ' + seconds + ' seconds'
     : (ai.photoWithPrint ? 'Digital photo and one print per photo' : 'Digital photo only');
-  const basis = ai.mode === 'unlimited' ? 'Unlimited, priced by operating capacity' : 'Priced by estimated attendance';
+  const recorded = savedResult?.lines.find(line => ['photo', 'video'].includes(line.unit));
+  const quantity = recorded?.quantity ?? ai.quantity;
+  const oldUnlimited = recorded?.label.includes('unlimited during booked hours');
+  const basis = oldUnlimited ? 'Unlimited during booked hours (saved quotation)' : ai.mode === 'unlimited' ? 'Flexible sessions, up to ' + count(quantity, 'session') + ' across the booking' : 'Priced by estimated attendance';
   const queue = unit.addons?.includes('queue') ? 'with queue management' : 'without queue management';
   const timing = count(ai.cycleSeconds, 'second') + ' per session ' + queue +
     (schedule.days > 1 ? ' · ' + count(ai.capacityPerDay, 'session') + '/day × ' + count(schedule.days, 'day') : '');
@@ -159,17 +162,17 @@ function quotationTotals(quote, estimate, showTotal) {
   return '<dl class="rv-tally">' + subtotal + booking + travel + total + '</dl>';
 }
 
-function terms(units, collapsed = false) {
+function terms(units, collapsed = false, legacy = false) {
   const policies = [
     ['Access and setup', 'Provide venue access and power by the agreed reporting time. Standard setup starts two hours before opening each day. Earlier staffed reporting costs ' + amount(RATE_CARD.earlySetupHour) + ' per hour per booth. Arrange unattended early installation separately.'],
-    ['Event extensions', 'Extra booth time is ' + amount(RATE_CARD.overtimeHour) + ' per hour per booth, subject to client approval and availability. Unlimited AI output and any extended staff shifts are recalculated for the new hours.'],
+    ['Event extensions', legacy ? 'Extra booth time is AED 400 per hour per booth, subject to approval and availability. Unlimited AI output and extended staff shifts are recalculated for the new hours.' : 'Booked-hour packages include automatic full-day caps and 15% off hire from day two. Extensions require approval and a revised quotation.'],
     ['Staffing', 'Remote technical support is included. B3YOND promoters are charged at ' + amount(RATE_CARD.promoterHour) + ' per person-hour for booked shifts. The client supplies a promoter for any remaining opening hours.'],
     ['Connectivity', 'Provide reliable Wi-Fi for AI generation, email delivery and QR downloads. Framed photos can be captured offline.'],
     ['Transport', 'Transport is shared across booths at the same venue. Any pending transport rate will be confirmed before booking.'],
     ['Payment', '50% in advance and 50% on delivery.'],
   ];
   if (units.some(unit => ['aiPhoto', 'aiVideo'].includes(unit.experience))) {
-    policies.splice(3, 0, ['AI sessions', 'Actual booth participation may vary. A session for every attendee cannot be guaranteed within the booked hours.']);
+    policies.splice(3, 0, ['AI sessions', legacy ? 'Actual booth participation may vary. A session for every attendee cannot be guaranteed within the booked hours.' : 'Actual participation may vary. Flexible sessions allow up to 125% of expected guests within booth capacity. Further sessions require approval at the selected unit rate. A turn for every attendee cannot be guaranteed within booked hours.']);
   }
   if (units.some(unit => unit.experience === 'aiPhoto' && unit.addons?.includes('printer'))) {
     policies.splice(4, 0, ['AI photo prints', 'Printed AI photos include one print per generation. Mirror Booth hire includes the printer. The Display Stand printer package includes email setup when selected.']);
@@ -184,6 +187,7 @@ export function renderReview(units, artworkCount = 2, saved = null) {
   if (!units.length) return '';
   const quote = saved?.quote ?? priceQuote(units, RATE_CARD, artworkCount);
   const estimate = quote.total ?? saved?.estimate?.amount ?? quoteEstimate(units, RATE_CARD, artworkCount).amount;
+  const manual = quote.requiresReview && !saved;
   const panels = units.map((unit, i) => {
     const title = escape(boothLabel(units, unit));
     const booth = getBooth(unit.type);
@@ -196,18 +200,19 @@ export function renderReview(units, artworkCount = 2, saved = null) {
       '" class="rv-edit">' + pencil + ' Edit</button></header>' +
       '<p class="rv-booking">' + escape(dateRange(unit)) + ' · ' + escape(unit.venue || 'Venue pending') + '</p>' +
       '<details class="rv-disclosure rv-booth-details"><summary>Event details and prices</summary><div class="rv-columns"><section><h3>Event details</h3>' +
-      detailList(unit, false) + productionPlan(unit) + '</section><section><h3>Price breakdown</h3>' + breakdown(quote.units[i]) + '</section></div></details></article>';
+      detailList(unit, false) + productionPlan(unit, saved ? quote.units[i] : null) + '</section><section><h3>Price breakdown</h3>' + (manual ? '<p>Pricing requires confirmation.</p>' : breakdown(quote.units[i])) + '</section></div></details></article>';
   });
   return '<div class="rv-stack"><section class="rv-total"><div><h2>' +
-    (quote.total == null ? 'Priced so far before VAT' : 'Estimate before VAT') + '</h2><strong>' + escape(amount(estimate)) + '</strong>' +
+    (quote.requiresReview ? 'Custom quote required' : quote.total == null ? 'Priced so far before VAT' : 'Estimate before VAT') + '</h2><strong>' + (manual ? 'Contact B3YOND' : escape(amount(estimate))) + '</strong>' +
     (quote.travelPending ? '<p>Transport still to confirm.</p>' : '') + '</div>' +
-    quotationTotals(quote, estimate, false) + '</section>' + panels.join('') + terms(units, true) + '</div>';
+    (manual ? '<p>B3YOND will confirm a tailored price for the selected volume or staffing.</p>' : quotationTotals(quote, estimate, false)) + '</section>' + panels.join('') + terms(units, true, Boolean(saved && !quote.pricingPolicyVersion)) + '</div>';
 }
 
 export function renderPrint(units, artworkCount = 2, saved = null) {
   if (!units.length) return '';
   const quote = saved?.quote ?? priceQuote(units, RATE_CARD, artworkCount);
   const estimate = quote.total ?? saved?.estimate?.amount ?? quoteEstimate(units, RATE_CARD, artworkCount).amount;
+  const manual = quote.requiresReview && !saved;
   const date = quoteDateFormat.format(saved?.createdAt ? new Date(saved.createdAt) : new Date());
   const lastUnit = units.at(-1);
   const separateSummary = lastUnit.experience !== 'frame' || quote.units.at(-1).lines.length > 4 || quote.travelLines.length > 1 || quote.bookingLines.length > 0 || lastUnit.venue?.length > 80;
@@ -218,11 +223,12 @@ export function renderPrint(units, artworkCount = 2, saved = null) {
       '<div class="rv-doc-meta"><span>' + escape(date) + '</span><span>Page ' + (index + 1) + ' of ' + pages + '</span></div>' +
       '<h1>' + title + '</h1>' + body + '</div></article>';
   };
-  const finalSection = quotationTotals(quote, estimate, true) + terms(units);
-  const sheets = units.map((unit, i) => sheet(i, 'Photo booth quotation',
-    '<h2>' + escape(boothLabel(units, unit)) + '</h2>' + detailList(unit) + productionPlan(unit) + '<h3>Price breakdown</h3>' +
-    breakdown(quote.units[i]) + (i === units.length - 1 && !separateSummary ? finalSection : '')));
-  if (separateSummary) sheets.push(sheet(units.length, 'Quotation summary', finalSection));
+  const finalSection = (manual ? '<p>Custom quote required. Pricing is pending confirmation by B3YOND.</p>' : quotationTotals(quote, estimate, true)) + terms(units, false, Boolean(saved && !quote.pricingPolicyVersion));
+  const sheets = units.map((unit, i) => sheet(i, quote.requiresReview ? 'Estimate for review' : 'Photo booth quotation',
+    '<h2>' + escape(boothLabel(units, unit)) + '</h2>' + detailList(unit) + productionPlan(unit, saved ? quote.units[i] : null) + '<h3>Price breakdown</h3>' +
+    (manual ? '<p>Pricing requires confirmation.</p>' : breakdown(quote.units[i])) + (i === units.length - 1 && !separateSummary ? finalSection : '')));
+  if (separateSummary) sheets.push(sheet(units.length, quote.requiresReview ? 'Custom quote required' : 'Quotation summary', finalSection));
   return sheets.join('');
 }
+
 

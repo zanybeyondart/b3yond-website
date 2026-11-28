@@ -128,8 +128,8 @@ function updateEstimate() {
   if (panel.hidden) return;
   const estimate = quoteEstimate(state.units,RATE_CARD,state.artworkCount);
   byId('estimate-label').textContent = estimate.incomplete ? 'Estimate so far' : 'Quote estimate';
-  byId('estimate-amount').textContent = formatAED(estimate.amount);
-  byId('estimate-detail').textContent = estimateDetails(estimate);
+  byId('estimate-amount').textContent = estimate.requiresReview ? 'Custom quote required' : formatAED(estimate.amount);
+  byId('estimate-detail').textContent = estimate.requiresReview ? 'B3YOND will confirm pricing for this booking.' : estimateDetails(estimate);
 }
 function updateControls() {
   const n = state.units.length, unit = activeUnit(), guide = unit && state.guide[unit.id];
@@ -244,7 +244,7 @@ function showSummary() {
   const rows = selected.map(b => '<div class="dlg-row"><img src="./assets/'+b.id+'.webp" alt=""><strong>'+escape(b.name)+'</strong><span>Qty '+b.count+'</span></div>').join('');
   const status = state.units.length ? (state.units.filter(finished).length+' of '+countText(state.units.length)+' configured.') : 'Your quotation is empty. Choose a booth to get started.';
   const estimate = quoteEstimate(state.units,RATE_CARD,state.artworkCount);
-  const amount = estimate.amount === null ? '' : '<div class="dlg-total"><span>'+(estimate.incomplete?'Estimate so far':'Quote estimate')+'</span><strong>'+formatAED(estimate.amount)+'</strong></div><p class="dialog-note estimate-note">'+escape(estimateDetails(estimate))+'</p>';
+  const amount = estimate.requiresReview ? '<p class="dialog-body">Custom quote required. B3YOND will confirm pricing for this booking.</p>' : estimate.amount === null ? '' : '<div class="dlg-total"><span>'+(estimate.incomplete?'Estimate so far':'Quote estimate')+'</span><strong>'+formatAED(estimate.amount)+'</strong></div><p class="dialog-note estimate-note">'+escape(estimateDetails(estimate))+'</p>';
   openDialog('Quote summary',rows+amount+'<p class="dialog-body">'+status+'</p>'+(state.units.length?'<p class="dialog-note">'+(storageWorking?'Your draft is saved on this device.':'This browser cannot save the draft after you close the page.')+'</p>':'')+
    '<div class="dlg-actions">'+(state.units.length?'<button class="dialog-btn" data-action="new-quote">New quote</button>':'')+(state.step>1?'<button class="dialog-btn" data-action="selection">Edit selection</button>':'')+'<button class="dialog-btn primary" data-action="close-summary">Continue editing</button></div>');
 }
@@ -393,3 +393,4 @@ recordRoute(true);
 save();
 render();
 recordRoute(true);
+
