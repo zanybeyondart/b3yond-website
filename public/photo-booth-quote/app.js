@@ -1,4 +1,4 @@
-import {BOOTHS, RATE_CARD, createUnit, getBooth, priceQuote, validateUnit} from './model.js';
+import {BOOTHS, RATE_CARD, boothHireRate, createUnit, getBooth, quoteEstimate, validateUnit} from './model.js';
 import {renderConfig, installConfig, showErrors} from './configure.js';
 import {renderReview, renderPrint} from './review.js';
 
@@ -62,7 +62,8 @@ function cards() {
     const control = count === 0
       ? '<button class="add-btn" type="button" data-action="add" data-type="' + b.id + '" aria-label="Add '+escape(b.name)+'">Add booth' + plus + '</button>'
       : '<div class="quantity" role="group" aria-label="'+escape(b.name)+' quantity"><button type="button" data-action="minus" data-type="'+b.id+'" aria-label="Remove one '+escape(b.name)+'">'+minus+'</button><output aria-label="Quantity">'+count+'</output><button data-action="add" type="button" data-type="'+b.id+'" aria-label="Add another '+escape(b.name)+'">'+plus+'</button></div>';
-    return '<article class="booth-card'+(count?' is-selected':'')+'"><button type="button" class="card-image" data-action="add" data-type="'+b.id+'" aria-label="Add one '+escape(b.name)+'"><picture><source media="(max-width:680px)" srcset="./assets/'+b.id+'.webp"><img width="1072" height="724" src="./assets/'+b.id+'-wide.webp" alt=""></picture><i class="framer tl"></i><i class="framer tr"></i><i class="framer br"></i><span class="card-tag">'+icon(pictogram)+escape(format)+'</span></button><div class="card-content"><h2>'+escape(b.name)+'</h2><p>'+escape(b.description)+'</p><div class="card-controls"><div class="starting-rate"><strong>'+formatAED(RATE_CARD.boothDay[b.id])+'</strong> <span>/ first '+RATE_CARD.includedHours+' hours</span></div>'+control+'</div></div></article>';
+    const startingRate = (b.id === 'classic' ? 'From ' : '') + formatAED(boothHireRate({type:b.id}));
+    return '<article class="booth-card'+(count?' is-selected':'')+'"><button type="button" class="card-image" data-action="add" data-type="'+b.id+'" aria-label="Add one '+escape(b.name)+'"><picture><source media="(max-width:680px)" srcset="./assets/'+b.id+'.webp"><img width="1072" height="724" src="./assets/'+b.id+'-wide.webp" alt=""></picture><i class="framer tl"></i><i class="framer tr"></i><i class="framer br"></i><span class="card-tag">'+icon(pictogram)+escape(format)+'</span></button><div class="card-content"><h2>'+escape(b.name)+'</h2><p>'+escape(b.description)+'</p><div class="card-controls"><div class="starting-rate"><strong>'+startingRate+'</strong> <span>/ first '+RATE_CARD.includedHours+' hours</span></div>'+control+'</div></div></article>';
   }).join('') + '</div>' + retiredSelection();
 }
 
@@ -75,6 +76,21 @@ function updateSteps() {
       (active?'aria-current="step"':'')+(!available?' disabled':'')+'><span class="step-num" aria-hidden="true">'+(done?check:num)+'</span>'+name+'</button>';
   }).join('');
 }
+function estimateDetails(estimate) {
+  const notes = ['Before VAT'];
+  if (estimate.assumedDays) notes.push('1 day assumed for booths without dates');
+  if (estimate.transportPending) notes.push('Transport pending');
+  return notes.join(' · ');
+}
+function updateEstimate() {
+  const panel = byId('running-estimate');
+  panel.hidden = !state.units.length || state.step === 3;
+  if (panel.hidden) return;
+  const estimate = quoteEstimate(state.units);
+  byId('estimate-label').textContent = estimate.incomplete ? 'Estimate so far' : 'Quote estimate';
+  byId('estimate-amount').textContent = formatAED(estimate.amount);
+  byId('estimate-detail').textContent = estimateDetails(estimate);
+}
 function updateControls() {
   const n = state.units.length, ready = state.units.filter(isComplete).length;
   byId('top-count').textContent = n;
@@ -83,6 +99,7 @@ function updateControls() {
   byId('back').hidden = state.step === 1;
   const otherIncomplete = state.units.some(u => u.id !== state.activeId && !isComplete(u));
   byId('next').textContent = state.step === 1 ? 'Continue' : state.step === 2 ? (otherIncomplete ? 'Next booth' : 'Review quotation') : 'Print / Save PDF';
+  updateEstimate();
   updateSteps();
 }
 function render() {
@@ -134,8 +151,8 @@ function showSummary() {
   const selected = types.map(id => ({...getBooth(id),count:state.units.filter(u => u.type === id).length}));
   const rows = selected.map(b => '<div class="dlg-row"><img src="./assets/'+b.id+'.webp" alt=""><strong>'+escape(b.name)+'</strong><span>Qty '+b.count+'</span></div>').join('');
   const status = state.units.length ? (state.units.filter(isComplete).length+' of '+countText(state.units.length)+' configured.') : 'Your quotation is empty. Choose a booth to get started.';
-  const total = selected.length ? priceQuote(state.units).total : null;
-  const amount = total === null ? '' : '<div class="dlg-total"><span>Total before VAT</span><strong>'+formatAED(total)+'</strong></div>';
+  const estimate = quoteEstimate(state.units);
+  const amount = estimate.amount === null ? '' : '<div class="dlg-total"><span>'+(estimate.incomplete?'Estimate so far':'Quote estimate')+'</span><strong>'+formatAED(estimate.amount)+'</strong></div><p class="dialog-note estimate-note">'+escape(estimateDetails(estimate))+'</p>';
   openDialog('Quote summary',rows+amount+'<p class="dialog-body">'+status+'</p>'+(state.units.length?'<p class="dialog-note">'+(storageWorking?'Your draft is saved on this device.':'This browser cannot save the draft after you close the page.')+'</p>':'')+
    '<div class="dlg-actions">'+(state.units.length?'<button class="dialog-btn" data-action="new-quote">New quote</button>':'')+(state.step>1?'<button class="dialog-btn" data-action="selection">Edit selection</button>':'')+'<button class="dialog-btn primary" data-action="close-summary">Continue editing</button></div>');
 }

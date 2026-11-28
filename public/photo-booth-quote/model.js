@@ -21,6 +21,7 @@ export const EXPERIENCES = [
 export const ADDONS = [
   { id: 'queue', name: 'Collection screen & queue management', description: 'Guests can find their session on a second screen while the main booth serves the next group.' },
   { id: 'stanchions', name: 'Queue barriers', description: 'Stanchion posts and belts to guide the guest line.' },
+  { id: 'props', name: 'Photo booth props', description: 'Add hats, novelty glasses and handheld signs for guests to use at the booth.' },
 ];
 
 export const DELIVERY_OPTIONS = [
@@ -37,11 +38,13 @@ export const RATE_CARD = {
   currency: 'AED',
   includedHours: 3,
   boothDay: { mirror: 2100, classic: 1650, grand: 2400 },
-  aiPhotoRate: 2,
+  displaySizePremiumDay: { 24: 0, 27: 100, 32: 200 },
+  aiPhotoRate: 0.50,
+  aiPhotoPrintRate: 1.50,
   videoRate15Seconds: { '720p': 6, '1080p': 12 },
   overtimeHour: 400,
   earlySetupHour: 100,
-  addonDay: { queue: 350, stanchions: 150, printer: 350 },
+  addonDay: { queue: 350, stanchions: 150, printer: 350, props: 0 },
   deliverySetup: { qr: 100, email: 150 },
   promoterHour: 75,
   transportDay: { Ajman: 150, Sharjah: 175, Dubai: 200, 'Abu Dhabi': 500 },
@@ -162,7 +165,9 @@ export function generationInfo(unit, rates = RATE_CARD) {
   const mode = unit.aiMode ?? 'fixed';
   const expectedGuests = positiveCount(unit.expectedGuests);
   const allocation = blank(unit.aiQuantity) ? expectedGuests : positiveCount(unit.aiQuantity);
-  const cycleSeconds = Array.isArray(unit.addons) && unit.addons.includes('queue') ? 20 : 45;
+  const addons = Array.isArray(unit.addons) ? unit.addons : [];
+  const cycleSeconds = addons.includes('queue') ? 20 : 45;
+  const photoWithPrint = unit.experience === 'aiPhoto' && addons.includes('printer');
   const { days, hoursPerDay } = scheduleInfo(unit);
   // Each daily session starts afresh. Partial cycles cannot carry into the next day.
   const sessionSeconds = hoursPerDay === null ? null : Math.round(hoursPerDay * 60) * 60;
@@ -170,7 +175,10 @@ export function generationInfo(unit, rates = RATE_CARD) {
   const capacity = days === null || capacityPerDay === null ? null : capacityPerDay * days;
   const quantity = !ai ? null : mode === 'fixed' ? allocation : mode === 'unlimited' ? capacity : null;
   let unitPrice = null;
-  if (unit.experience === 'aiPhoto' && validRate(rates.aiPhotoRate)) unitPrice = rates.aiPhotoRate;
+  if (unit.experience === 'aiPhoto') {
+    const rate = photoWithPrint ? rates.aiPhotoPrintRate : rates.aiPhotoRate;
+    if (validRate(rate)) unitPrice = rate;
+  }
   if (unit.experience === 'aiVideo') {
     const resolution = unit.videoResolution ?? '720p';
     const seconds = Number(unit.videoSeconds ?? 15);
@@ -182,7 +190,7 @@ export function generationInfo(unit, rates = RATE_CARD) {
   const amount = quantity === null || unitPrice === null ? null : money(quantity * unitPrice);
   const overCapacity = mode === 'fixed' && capacity !== null && allocation !== null && allocation > capacity;
   const guestShortfall = expectedGuests === null || capacity === null ? null : Math.max(0, expectedGuests - capacity);
-  return { mode, expectedGuests, allocation, cycleSeconds, capacityPerDay, capacity, quantity, unitPrice, amount, overCapacity, guestShortfall };
+  return { mode, expectedGuests, allocation, cycleSeconds, capacityPerDay, capacity, quantity, unitPrice, amount, overCapacity, guestShortfall, photoWithPrint };
 }
 
 export function staffingInfo(unit, rates = RATE_CARD) {
@@ -270,6 +278,15 @@ export function isLongDayOfferEligible(unit) {
   return unit.type === 'mirror' && days === 4 && hoursPerDay === 12;
 }
 
+export function boothHireRate(unit, rates = RATE_CARD) {
+  const baseRate = rates.boothDay?.[unit.type];
+  if (!validRate(baseRate)) return null;
+  if (unit.type !== 'classic') return baseRate;
+  const premiums = rates.displaySizePremiumDay ?? RATE_CARD.displaySizePremiumDay;
+  const premium = premiums[unit.screenSize ?? 24];
+  return validRate(premium) ? money(baseRate + premium) : null;
+}
+
 export function addonPrice(id, type, rates = RATE_CARD) {
   return digitalSetupIds.has(id) ? rates.deliverySetup?.[id] : rates.addonDay?.[id];
 }
@@ -290,15 +307,18 @@ export function priceUnit(unit, rates = RATE_CARD) {
   const { days, hoursPerDay, earlyHoursPerDay } = scheduleInfo(unit);
   const booth = getBooth(unit.type);
   const experience = EXPERIENCES.find(item => item.id === unit.experience);
+  const hireLabel = unit.type === 'classic' ? 'Display Stand (' + (unit.screenSize ?? 24) + '″)' : booth?.name || 'Booth hire';
   const lines = [
-    line(booth?.name || 'Booth hire', days, rates.boothDay?.[unit.type], 'day'),
+    line(hireLabel, days, boothHireRate(unit, rates), 'day'),
   ];
   if (experience?.id === 'frame') {
     lines.push(line('Branded frame', 1, 0, 'setup'));
   } else if (experience) {
     const generation = generationInfo(unit, rates);
     const video = experience.id === 'aiVideo';
-    const format = video ? ' (' + (unit.videoResolution ?? '720p') + ', ' + (unit.videoSeconds ?? 15) + 's)' : '';
+    const format = video
+      ? ' (' + (unit.videoResolution ?? '720p') + ', ' + (unit.videoSeconds ?? 15) + 's)'
+      : (generation.photoWithPrint ? ' + one print' : ' (digital only)');
     const plan = generation.mode === 'unlimited' ? 'unlimited during booked hours' : 'fixed allocation';
     lines.push(line(experience.name + format + ' · ' + plan, generation.quantity, generation.unitPrice, video ? 'video' : 'photo'));
   }
@@ -326,10 +346,15 @@ export function priceUnit(unit, rates = RATE_CARD) {
     const rate = addonPrice(item.id, unit.type, rates);
     const quantity = digital ? 1 : days;
     const basis = digital ? 'setup' : 'day';
-    const label = item.id === 'printer' && unit.experience === 'aiVideo' ? item.name + ' · video stills' : item.name;
+    let label = item.name;
+    if (item.id === 'printer') {
+      label = 'On-site photo printer hire';
+      if (unit.experience === 'aiVideo') label += ' · video stills';
+    }
     lines.push(line(label, quantity, rate, basis));
     if (addonIncluded(item.id, unit.type)) {
-      lines.push(line('Mirror package credit · ' + item.name, quantity, rate, basis, -1));
+      const credit = item.id === 'printer' ? 'On-site photo printer hire' : item.name;
+      lines.push(line('Mirror package credit · ' + credit, quantity, rate, basis, -1));
     }
   }
   const complete = !Object.keys(validateUnit(unit)).length && lines.every(item => item.amount !== null);
@@ -385,4 +410,29 @@ export function priceQuote(units, rates = RATE_CARD) {
   const travelTotal = travelPending ? null : money(travelLines.reduce((sum, item) => sum + item.amount, 0));
   const total = subtotal === null || travelTotal === null ? null : money(subtotal + travelTotal);
   return { units: results, subtotal, travelDays, travelTotal, travelLines, travelPending, total };
+}
+
+export function quoteEstimate(units, rates = RATE_CARD) {
+  const quote = priceQuote(units, rates);
+  const estimate = { amount: quote.total, assumedDays: false, transportPending: quote.travelPending, incomplete: quote.total === null };
+  if (!estimate.incomplete || !units.length) return estimate;
+
+  let amount = 0;
+  const scheduledVenues = [];
+  units.forEach((unit, index) => {
+    let result = quote.units[index];
+    if (scheduleInfo(unit).days === null) {
+      // The provisional price covers one day until both dates are valid.
+      const date = dateValue(unit.startDate) === null ? '2000-01-01' : unit.startDate;
+      result = priceUnit({ ...unit, startDate: date, endDate: date }, rates);
+      estimate.assumedDays = true;
+    } else if (normalizedVenue(unit.venue)) {
+      scheduledVenues.push(unit);
+    }
+    for (const item of result.lines) amount += item.amount ?? 0;
+  });
+  // Unscheduled booths must neither create travel charges nor hide scheduled ones at the same venue.
+  for (const item of transportLines(scheduledVenues, rates)) amount += item.amount ?? 0;
+  estimate.amount = money(amount);
+  return estimate;
 }

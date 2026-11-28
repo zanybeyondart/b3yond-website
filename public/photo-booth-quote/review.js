@@ -1,6 +1,7 @@
 import { ADDONS, DELIVERY_OPTIONS, EXPERIENCES, RATE_CARD, generationInfo, getBooth, priceQuote, scheduleInfo, staffingInfo, transportInfo } from './model.js';
 
 const currency = new Intl.NumberFormat('en-AE', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const fractionalCurrency = new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dateFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const quoteDateFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Dubai' });
 const pencil = '<svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5 4 4M4 20l4-.8L20 7.3a2.8 2.8 0 0 0-4-4L4.9 15.6 4 20Z"/></svg>';
@@ -11,7 +12,8 @@ function escape(value) {
 }
 function amount(value) {
   if (value == null) return 'Pending';
-  return (value < 0 ? '−' : '') + RATE_CARD.currency + ' ' + currency.format(Math.abs(value));
+  const formatter = Number.isInteger(value) ? currency : fractionalCurrency;
+  return (value < 0 ? '−' : '') + RATE_CARD.currency + ' ' + formatter.format(Math.abs(value));
 }
 function day(value) {
   const stamp = Date.parse(value + 'T00:00:00Z');
@@ -91,7 +93,9 @@ function productionPlan(unit) {
   const schedule = scheduleInfo(unit);
   const video = unit.experience === 'aiVideo';
   const output = video ? 'video' : 'photo';
-  const format = video ? ' · ' + (unit.videoResolution || '720p') + ', ' + (unit.videoSeconds || 15) + ' seconds' : '';
+  const format = video
+    ? (unit.videoResolution || '720p') + ', ' + (unit.videoSeconds || 15) + ' seconds'
+    : (ai.photoWithPrint ? 'Digital photo and one print per photo' : 'Digital photo only');
   const basis = ai.mode === 'unlimited' ? 'Unlimited during booked hours' : 'Fixed allocation';
   let price = count(ai.quantity, output) + ' × ' + amount(ai.unitPrice) + ' per ' + output;
   if (video && Number(unit.videoSeconds ?? 15) < 15) {
@@ -104,7 +108,7 @@ function productionPlan(unit) {
   const result = count(ai.capacityPerDay, output) + '/day × ' + count(schedule.days, 'day') + ' = ' + count(ai.capacity, output);
   const facts = [
     ['Expected guests', count(ai.expectedGuests, 'guest') + ' across this booking'],
-    ['Pricing basis', basis + format],
+    ['Pricing basis', basis + ' · ' + format],
     ['Estimated capacity', inputs + ' per generation ' + queue + '. Counting complete generations gives ' + result + ' over the booking.'],
     ['Quoted output', price],
   ];
@@ -128,7 +132,7 @@ function breakdown(result) {
     const included = line.rate === 0 && line.amount === 0;
     const unitRate = included ? '' : '<small class="rv-rate"> × ' + escape(amount(line.rate)) + '/' + escape(line.unit) + '</small>';
     return '<tr><th scope="row">' + escape(line.label) + '</th><td>' + count(line.quantity, line.unit) +
-      unitRate + '</td><td>' + (included ? 'Included' : escape(amount(line.amount))) + '</td></tr>';
+      unitRate + '</td><td>' + (included ? 'Included · ' + escape(amount(0)) : escape(amount(line.amount))) + '</td></tr>';
   }).join('');
   return '<table class="rv-lines"><thead><tr><th scope="col">Item</th><th scope="col">Quantity × rate</th><th scope="col">Amount</th></tr></thead><tbody>' +
     rows + '</tbody><tfoot><tr><th scope="row" colspan="2">Booth subtotal</th><td>' + escape(amount(result.total)) + '</td></tr></tfoot></table>';
@@ -164,6 +168,9 @@ function terms(units) {
   ];
   if (units.some(unit => ['aiPhoto', 'aiVideo'].includes(unit.experience))) {
     policies.splice(4, 0, ['AI output', 'Fixed bookings are priced by the selected number of outputs. Unlimited bookings are priced using estimated capacity during event hours. Actual output depends on guest participation and operating conditions.']);
+  }
+  if (units.some(unit => unit.experience === 'aiPhoto' && unit.addons?.includes('printer'))) {
+    policies.splice(5, 0, ['AI photo prints', 'Each quoted AI photo includes one print when the on-site printer is selected. Printer hire is shown separately. A Mirror Booth package credit covers the hire.']);
   }
   return '<section class="rv-terms"><h2>Terms and conditions</h2><dl>' + policies.map(([name, detail]) =>
     '<div><dt>' + escape(name) + '</dt><dd>' + escape(detail) + '</dd></div>').join('') + '</dl></section>';
