@@ -1,0 +1,85 @@
+.rv-stack, #print-view {
+  --rv-ink: #203137;
+  --rv-teal: #076977;
+  --rv-muted: #4f6268;
+  --rv-rule: #cedbde;
+  --rv-wash: #edf5f5;
+}
+.rv-stack { display: grid; gap: 18px; }
+.rv-stack h2, .rv-stack h3, .rv-stack p, .rv-details, .rv-details dd { margin: 0; }
+.rv-panel, .rv-total, .rv-stack .rv-terms {
+  border: 1px solid var(--rv-rule); border-radius: 12px; background: white; color: var(--rv-ink);
+}
+.rv-head { display: flex; align-items: center; gap: 15px; padding: 18px 24px; border-bottom: 1px solid var(--rv-rule); }
+.rv-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; background: var(--rv-wash); }
+.rv-head h2 { font-size: 1.3rem; letter-spacing: -.035em; }
+.rv-edit { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; margin-left: auto; background: white; color: var(--rv-teal); border: 1px solid var(--rv-rule); padding: 7px 13px; border-radius: 7px; font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; }
+.rv-edit:hover { background: var(--rv-wash); }
+.rv-columns, .rv-total { display: grid; grid-template-columns: minmax(0,.9fr) minmax(0,1.1fr); align-items: start; gap: clamp(26px,5vw,72px); padding: 24px; }
+.rv-columns section { min-width: 0; }
+.rv-columns h3 { font-size: 1rem; margin-bottom: 17px; color: var(--rv-teal); }
+.rv-details { display: grid; gap: 10px; }
+.rv-details div { display: grid; grid-template-columns: minmax(95px,.55fr) minmax(0,1fr); gap: 12px; font-size: .9rem; line-height: 1.4; }
+.rv-details dt, .rv-rate { color: var(--rv-muted); }
+.rv-details dd { font-weight: 500; overflow-wrap: anywhere; }
+.rv-lines { border-collapse: collapse; width: 100%; font-size: .9rem; color: var(--rv-ink); }
+.rv-lines th, .rv-lines td { text-align: start; padding: 9px 8px; font-weight: 450; vertical-align: top; }
+.rv-lines th:last-child, .rv-lines td:last-child { text-align: end; }
+.rv-lines tbody tr { border-bottom: 1px solid var(--rv-rule); }
+.rv-lines tbody td:last-child, .rv-lines tfoot td { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rv-lines thead { color: var(--rv-teal); background-color: var(--rv-wash); border-block: 1px solid var(--rv-rule); }
+.rv-lines thead th { font-size: .82rem; font-weight: 600; }
+.rv-lines tfoot { border-top: 1px solid var(--rv-rule); color: var(--rv-teal); }
+.rv-lines tfoot th, .rv-lines tfoot td { font-weight: 700; }
+.rv-rate { display: block; font-size: .85em; white-space: nowrap; }
+.rv-total h2, .rv-terms h2 { font-size: 1.15rem; }
+.rv-total p { color: var(--rv-muted); font-size: .9rem; margin-top: 5px; }
+.rv-tally, .rv-tally dd, .rv-terms dl, .rv-terms dd { margin: 0; }
+.rv-tally { display: grid; gap: 9px; }
+.rv-tally-line { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; font-size: .95rem; }
+.rv-tally-line dd { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rv-tally-line small { display: block; color: var(--rv-muted); font-size: .85em; margin-top: 2px; }
+.rv-tally-total { border-top: 2px solid var(--rv-teal); padding-top: 12px; font-weight: 700; font-size: 1.1rem; color: var(--rv-teal); }
+.rv-stack .rv-terms { padding: 24px; }
+.rv-terms dl { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px 32px; margin-top: 14px; }
+.rv-terms dl div { font-size: .9rem; line-height: 1.45; }
+.rv-terms dt { font-weight: 700; }
+.rv-terms dd { margin-top: 2px; color: var(--rv-muted); }
+#print-view { display: none; }
+@media(max-width: 720px) {
+  .rv-head { padding: 15px 18px; }
+  .rv-columns, .rv-total { grid-template-columns: 1fr; padding: 18px; gap: 22px; }
+  .rv-stack .rv-terms { padding: 18px; }
+  .rv-terms dl { grid-template-columns: 1fr; }
+  .rv-lines td, .rv-lines th { padding-inline: 4px; }
+}
+@page { size: A4; margin: 0; }
+@media print {
+  html, body { margin: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; background: white !important; }
+  #site, body > dialog, body > .toast { display: none !important; }
+  #print-view { display: block !important; position: static; color: var(--rv-ink); line-height: 1.3; font-family: Arial, sans-serif; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .rv-sheet { position: relative; margin: 0; padding: 32mm 16mm 22mm; width: 210mm; min-height: 296.5mm; box-sizing: border-box; break-after: page; }
+  .rv-sheet:last-child { break-after: auto; }
+  .rv-letterhead { position: absolute; left: 0; top: 0; width: 210mm; height: 297mm; max-width: none; object-fit: fill; z-index: 0; }
+  .rv-sheet-body { position: relative; z-index: 1; }
+  .rv-doc-meta { display: flex; justify-content: space-between; color: var(--rv-muted); font-size: 8.5pt; }
+  .rv-sheet h1 { margin: 2.5mm 0 3.5mm; padding-bottom: 2.5mm; border-bottom: 1.4pt solid var(--rv-teal); font-size: 24pt; font-weight: 700; letter-spacing: -.8pt; line-height: 1.08; color: var(--rv-teal); }
+  .rv-sheet h2 { margin: 0 0 2.5mm; color: var(--rv-ink); font-size: 13.5pt; }
+  .rv-sheet h3 { margin: 3mm 0 1.5mm; color: var(--rv-teal); font-size: 10.5pt; }
+  .rv-sheet .rv-details { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1.3mm 6mm; }
+  .rv-sheet .rv-details div { grid-template-columns: 23mm minmax(0,1fr); gap: 1mm; font-size: 9pt; line-height: 1.28; }
+  .rv-sheet .rv-details dt { color: var(--rv-muted); }
+  .rv-sheet .rv-lines { font-size: 9.5pt; }
+  .rv-sheet .rv-lines th, .rv-sheet .rv-lines td { padding: 1.1mm 1.6mm; }
+  .rv-sheet .rv-lines thead th { font-size: 8.5pt; }
+  .rv-sheet .rv-rate { display: inline; font-size: inherit; }
+  .rv-sheet .rv-tally { margin: 2mm 0 0 auto; max-width: 113mm; gap: 1.15mm; }
+  .rv-sheet .rv-tally-line { font-size: 9pt; }
+  .rv-sheet .rv-tally-line small { display: inline; font-size: 8.5pt; margin-left: 2mm; }
+  .rv-sheet .rv-tally-total { border-top-width: 1.3pt; padding: 2mm 1.6mm; background: var(--rv-wash); font-size: 11pt; }
+  .rv-sheet .rv-terms { padding-top: 2mm; margin-top: 4mm; border-top: 1px solid var(--rv-rule); }
+  .rv-sheet .rv-terms h2 { color: var(--rv-teal); font-size: 10.5pt; }
+  .rv-sheet .rv-terms dl { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1.8mm 5mm; margin: 0; }
+  .rv-sheet .rv-terms dl div { font-size: 9pt; line-height: 1.28; break-inside: avoid; }
+  .rv-sheet .rv-terms dd { margin-top: .3mm; }
+}

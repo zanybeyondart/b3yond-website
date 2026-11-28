@@ -1,0 +1,36 @@
+.venue-box { position: relative; }
+.venue-options {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 5;
+  max-height: 230px; margin: 0; padding: 4px; overflow-y: auto;
+  list-style: none; border-radius: 7px; border: 1px solid #a7c8cb;
+  background: #fff; box-shadow: 0 5px 16px #17383a1f;
+}
+.venue-options [role="option"] {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  min-height: 44px; padding: 8px 10px; gap: 3px 12px;
+  border-radius: 4px; font-size: .9rem; cursor: pointer;
+}
+.venue-options [role="option"] strong { font-weight: 600; }
+.venue-options [role="option"] span { color: #566466; font-size: .85rem; }
+.venue-options [role="option"]:hover, .venue-options [aria-selected="true"] { background: #e6f4f5; }
+.venue-support { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 3px 16px; }
+.venue-support p { margin: 0; font-size: .875rem; line-height: 1.5; color: #536064; }
+.venue-support a { color: #086473; font-size: .875rem; font-weight: 600; padding: 4px 0; text-underline-offset: 3px; }
+.venue-no-match { margin: 0; color: #315f65; font-size: .875rem; line-height: 1.45; }
+.venue-box { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.cfg .venue-search {
+  min-height: 44px; padding: 8px 13px; border: 1px solid #76a5aa; border-radius: 6px;
+  background: #eff9f9; color: #0c5e69; font-size: .88rem; font-weight: 600;
+}
+.cfg .venue-search:disabled { opacity: .55; cursor: default; }
+.venue-map-results { display: grid; gap: 8px; padding: 12px; border: 1px solid #c5d9da; border-radius: 6px; }
+.venue-map-results [role="status"] { color: #3a5357; font-size: .88rem; }
+.venue-map-results [data-venue-buttons] { display: grid; gap: 3px; }
+.venue-map-results [data-venue-buttons]:empty { display: none; }
+.cfg .venue-map-results button {
+  display: grid; justify-items: start; gap: 2px; padding: 8px; min-height: 44px;
+  text-align: start; border: 0; border-radius: 4px; background: #f5f8f8; font-size: .9rem;
+}
+.cfg .venue-map-results button:hover { background: #e6f4f5; }
+.cfg .venue-map-results button span { font-size: .85rem; color: #536064; }
+.venue-map-results small, .venue-map-results small a { color: #536064; font-size: .8rem; }

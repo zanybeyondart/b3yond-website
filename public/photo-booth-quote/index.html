@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f4f8f8">
+  <meta name="description" content="Configure your B3YOND photo booth quotation. Choose booths, set event details and review your quote.">
+  <title>Quote Studio · B3YOND</title>
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./config.css">
+  <link rel="stylesheet" href="./review.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <div id="site">
+    <header class="masthead">
+      <div class="wrap mast-inner">
+        <div class="brand"><img src="./assets/b3yond-logo.png" alt="B3YOND"><span class="brand-rule"></span><span>Quote Studio</span></div>
+        <button class="summary-trigger" type="button" data-action="summary" aria-haspopup="dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-1.8-3 1.8-3-1.8L6 21V3Z"/><path d="M9.5 7h5M9.5 11h5M9.5 15h3"/></svg>
+          Quote summary <span id="top-count">0</span>
+        </button>
+      </div>
+    </header>
+    <main class="wrap">
+      <nav id="steps" class="steps" aria-label="Quotation progress"></nav>
+      <div class="page-heading"><div><h1 id="title" tabindex="-1"></h1><p id="intro"></p></div><div class="camera-mark" aria-hidden="true">
+        <svg viewBox="0 0 90 75"><g fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 19V3h16m54 0h16v16M2 56v16h16m54 0h16V56"/><circle cx="45" cy="37.5" r="21"/><path d="m45 16.5 10 16.8m8.2-6.3-10 17.2m10 3.8H43m2 10.5-10.5-18m-7.6 7.5 10-17m-10-4h20"/></g><circle cx="78" cy="13" r="2.4" fill="#0a8291"/></svg>
+      </div></div>
+      <div id="pane"></div>
+      <p class="selection-error" id="selection-error" role="alert" hidden></p>
+      <section class="selection-bar" aria-label="Quotation controls">
+        <div class="bar-summary"><span class="bar-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Z"/><path d="m4 11.7 8 4.5 8-4.5M4 16l8 4.6 8-4.6"/></svg></span><div><small id="bar-label"></small><strong id="bar-status"></strong></div></div>
+        <div class="bar-actions"><button type="button" id="back" data-action="back">Back</button><button type="button" id="next" data-action="next"></button></div>
+      </section>
+    </main>
+    <footer class="wrap page-footer"><span>B3YOND <i></i> Event Experiences</span><span>AED · UAE (GMT+4)</span></footer>
+    <dialog id="summary" aria-labelledby="summary-title"><div class="dialog-head"><h2 id="summary-title">Quote summary<span>.</span></h2><button data-action="close-summary" type="button" aria-label="Close quote summary">×</button></div><div id="dialog-content"></div></dialog>
+    <div class="sr-only" id="announcement" role="status" aria-live="polite"></div>
+  </div>
+  <div id="print-view"></div>
+  <noscript>Please enable JavaScript to configure your photo booth quotation.</noscript>
+</body>
+</html>
