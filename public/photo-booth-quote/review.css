@@ -81,6 +81,8 @@
   .rv-sheet { position: relative; margin: 0; padding: 32mm 16mm 22mm; width: 210mm; min-height: 296.5mm; box-sizing: border-box; break-after: page; }
   .rv-sheet:last-child { break-after: auto; }
   .rv-letterhead { position: absolute; left: 0; top: 0; width: 210mm; height: 297mm; max-width: none; object-fit: fill; z-index: 0; }
+  /* The central watermark occupies x65–145 mm and y85–212 mm on the A4 artwork. */
+  .rv-sheet::after { content: ''; position: absolute; z-index: 0; left: 64mm; top: 83mm; width: 82mm; height: 131mm; background: rgba(255,255,255,.72); }
   .rv-sheet-body { position: relative; z-index: 1; }
   .rv-doc-meta { display: flex; justify-content: space-between; color: var(--rv-muted); font-size: 8.5pt; }
   .rv-sheet h1 { margin: 2.5mm 0 3.5mm; padding-bottom: 2.5mm; border-bottom: 1.4pt solid var(--rv-teal); font-size: 24pt; font-weight: 700; letter-spacing: -.8pt; line-height: 1.08; color: var(--rv-teal); }

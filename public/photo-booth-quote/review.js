@@ -150,9 +150,8 @@ function quotationTotals(quote, estimate, showTotal) {
   }).join('');
   const travel = quote.travelLines.map(line => {
     const place = line.emirate ? escape(line.emirate) : 'Other venue';
-    const units = count(line.days, 'venue-day');
-    const rate = line.rate == null ? '' : ' × ' + escape(amount(line.rate));
-    return totalLine('Transport · ' + place + '<small>' + units + rate + '</small>',
+    const breakdown = line.days > 1 && line.rate != null ? '<small>' + line.days + ' × ' + escape(amount(line.rate)) + '</small>' : '';
+    return totalLine('Transport · ' + place + breakdown,
       line.amount == null ? 'To confirm' : amount(line.amount));
   }).join('');
   const total = showTotal ? totalLine(quote.total == null ? 'Priced so far before VAT' : 'Estimate before VAT',
@@ -161,14 +160,12 @@ function quotationTotals(quote, estimate, showTotal) {
 }
 
 function terms(units, collapsed = false) {
-  const localRates = Object.entries(RATE_CARD.transportDay).map(([emirate, rate]) =>
-    emirate + ' ' + amount(rate)).join(', ');
   const policies = [
     ['Access and setup', 'Provide venue access and power by the agreed reporting time. Standard setup starts two hours before opening each day. Earlier staffed reporting costs ' + amount(RATE_CARD.earlySetupHour) + ' per hour per booth. Arrange unattended early installation separately.'],
     ['Event extensions', 'Extra booth time is ' + amount(RATE_CARD.overtimeHour) + ' per hour per booth, subject to client approval and availability. Unlimited AI output and any extended staff shifts are recalculated for the new hours.'],
     ['Staffing', 'Remote technical support is included. B3YOND promoters are charged at ' + amount(RATE_CARD.promoterHour) + ' per person-hour for booked shifts. The client supplies a promoter for any remaining opening hours.'],
     ['Connectivity', 'Provide reliable Wi-Fi for AI generation, email delivery and QR downloads. Framed photos can be captured offline.'],
-    ['Transport', 'One charge applies per venue per event day. ' + localRates + '. Other locations require confirmation.'],
+    ['Transport', 'Transport is shared across booths at the same venue. Any pending transport rate will be confirmed before booking.'],
     ['Payment', '50% in advance and 50% on delivery.'],
   ];
   if (units.some(unit => ['aiPhoto', 'aiVideo'].includes(unit.experience))) {
