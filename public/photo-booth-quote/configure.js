@@ -1,5 +1,5 @@
 import {
-  ADDONS, DELIVERY_OPTIONS, EXPERIENCES, RATE_CARD, SCREEN_SIZES, VIDEO_RESOLUTIONS, VIDEO_SECONDS, addonIncluded, addonPrice, boothHireRate, generationInfo, getBooth,
+  ADDONS, DELIVERY_OPTIONS, EXPERIENCES, RATE_CARD, SCREEN_SIZES, VIDEO_RESOLUTIONS, VIDEO_SECONDS, addonIncluded, addonPrice, artworkPricing, boothHireRate, generationInfo, getBooth,
   isLongDayOfferEligible, scheduleInfo, staffingInfo, transportInfo, validateUnit,
 } from './model.js';
 import { renderVenue, installVenue } from './venue.js';
@@ -126,21 +126,34 @@ function preview(item) {
     '" data-playing="' + playing + '" aria-label="' + action + ' ' + escape(item.name) + ' preview">' + action + '</button></div>';
 }
 
-function experienceSection(unit) {
+function experienceSection(unit, artworkCount) {
   const cards = EXPERIENCES.map(item => '<div class="cfg-experience-card">' + preview(item) +
     '<label class="cfg-experience-option"><input type="radio" name="cfg-experience" data-cfg-field="experience" value="' +
     escape(item.id) + '" aria-describedby="cfg-error-experience"' + (unit.experience === item.id ? ' checked' : '') + '>' +
     '<span class="cfg-choice-text"><strong>' + escape(item.name) +
     '</strong><span class="cfg-network">' + connectivity[item.id] + '</span></span></label></div>').join('');
   return '<section class="cfg-panel" aria-labelledby="cfg-exp-title"><h2 id="cfg-exp-title" class="cfg-sr">Guest experience</h2><fieldset class="cfg-choice-list"><legend class="cfg-sr">Choose an experience</legend>' +
-    cards + '</fieldset>' + errorSlot('experience') + outputOptions(unit) + '</section>';
+    cards + '</fieldset>' + errorSlot('experience') + outputOptions(unit, artworkCount) + '</section>';
 }
 
 function videoPrice(unit, resolution) {
   return money(generationInfo({...unit, experience: 'aiVideo', videoResolution: resolution}).unitPrice) + ' / video';
 }
 
-function outputOptions(unit) {
+function artworkControls(unit, artworkCount) {
+  const {count, amount} = artworkPricing(artworkCount);
+  return '<div class="cfg-designs" data-cfg-designs' + (unit.customArtwork === true ? '' : ' hidden') +
+    '><div class="cfg-designs-header"><strong id="cfg-designs-title">Designs for this booking</strong>' +
+    '<div class="cfg-design-count" role="group" aria-labelledby="cfg-designs-title" aria-describedby="cfg-design-pricing">' +
+    '<button type="button" data-cfg-design-step="-1" aria-label="Remove one artwork design"' + (count <= 1 ? ' disabled' : '') + '>−</button>' +
+    '<output aria-label="Number of artwork designs" aria-live="off" data-cfg-design-count>' + count + '</output>' +
+    '<button type="button" data-cfg-design-step="1" aria-label="Add one artwork design">+</button></div></div>' +
+    '<p class="cfg-hint" id="cfg-design-pricing">' + money(RATE_CARD.customArtworkSetup) + ' covers the first 2 designs. Each additional pair is ' +
+    money(RATE_CARD.customArtworkExtraPair) + '. A single extra design counts as a pair.</p>' +
+    '<div class="cfg-design-total"><span>Artwork fee across all booths</span><strong data-cfg-design-total>' + money(amount) + '</strong></div></div>';
+}
+
+function outputOptions(unit, artworkCount) {
   const withPrint = unit.addons.includes('printer');
   const photoChoices = [
     ['digital', 'Digital only', RATE_CARD.aiPhotoRate, !withPrint],
@@ -152,11 +165,11 @@ function outputOptions(unit) {
   const equipment = addonIncluded('printer', unit) ? 'Printer hire is included with the Mirror Booth.' :
     'Printer hire adds ' + dailyRate(addonPrice('printer', unit)) + (unit.type === 'classic' ? ', including email setup.' : '.');
   const artwork = '<fieldset class="cfg-plan-options cfg-artwork"><legend>AI photo theme</legend><div class="cfg-format-choices">' +
-    [['standard', 'Standard theme', 'Included'], ['custom', 'Custom artwork', money(RATE_CARD.customArtworkSetup) + ' once per booking']]
+    [['standard', 'Standard theme', 'Included'], ['custom', 'Custom artwork', 'From ' + money(RATE_CARD.customArtworkSetup) + ' / booking']]
       .map(([value, name, cost]) => '<label class="cfg-staff-choice"><input type="radio" name="cfg-artwork" data-cfg-field="customArtwork" value="' +
         value + '"' + ((value === 'custom') === (unit.customArtwork === true) ? ' checked' : '') +
         '><span><strong>' + name + '</strong><span class="cfg-rate">' + cost + '</span></span></label>').join('') +
-    '</div></fieldset>' + errorSlot('customArtwork');
+    '</div></fieldset>' + errorSlot('customArtwork') + artworkControls(unit, artworkCount);
   const resolutions = VIDEO_RESOLUTIONS.map(resolution =>
     '<label class="cfg-staff-choice"><input type="radio" name="cfg-resolution" data-cfg-field="videoResolution" value="' + resolution +
     '" aria-describedby="cfg-error-videoResolution"' + ((unit.videoResolution ?? '720p') === resolution ? ' checked' : '') +
@@ -420,11 +433,11 @@ export function partForField(key, unit) {
   return Math.max(0, partFields.findIndex(fields => fields.includes(key)));
 }
 
-export function renderConfig(units, activeId, part = 0) {
+export function renderConfig(units, activeId, part = 0, artworkCount = 2) {
   const unit = units.find(item => item.id === activeId) ?? units[0];
   if (!unit) return '';
   const panels = [
-    () => standSizeSection(unit) + experienceSection(unit),
+    () => standSizeSection(unit) + experienceSection(unit, artworkCount),
     () => eventSection(units, unit),
     () => attendanceSection(units, unit),
     () => deliverySection(unit) + addonsSection(unit) + staffingSection(unit),
@@ -471,7 +484,7 @@ function toggleAddon(unit, id, selected) {
   unit.addons = [...addons];
 }
 
-export function installConfig(root, { getUnits, getActiveId, setActive, changed }) {
+export function installConfig(root, { getUnits, getActiveId, setActive, getArtworkCount, setArtworkCount, changed }) {
   const activeUnit = () => getUnits().find(unit => unit.id === getActiveId()) ?? getUnits()[0];
   installVenue(root, {getUnit: activeUnit, changed: () => changed({render: true})});
   function reflectPlayback(event) {
@@ -482,9 +495,22 @@ export function installConfig(root, { getUnits, getActiveId, setActive, changed 
   root.addEventListener('play', reflectPlayback, true);
   root.addEventListener('ended', reflectPlayback, true);
   root.addEventListener('click', event => {
-    const button = event.target.closest('[data-cfg-unit], [data-cfg-copy], [data-cfg-preview], [data-cfg-play-video]');
+    const button = event.target.closest('[data-cfg-unit], [data-cfg-copy], [data-cfg-preview], [data-cfg-play-video], [data-cfg-design-step]');
     if (!button) return;
-    if (button.hasAttribute('data-cfg-play-video')) {
+    if (button.hasAttribute('data-cfg-design-step')) {
+      const current = artworkPricing(getArtworkCount()).count;
+      const next = current + Number(button.dataset.cfgDesignStep);
+      if (!Number.isSafeInteger(next) || next < 1) return;
+      const {count, amount} = artworkPricing(next);
+      setArtworkCount(count);
+      root.querySelector('[data-cfg-design-count]').textContent = count;
+      root.querySelector('[data-cfg-design-total]').textContent = money(amount);
+      const minus = root.querySelector('[data-cfg-design-step="-1"]');
+      if (count === 1 && minus === root.ownerDocument.activeElement) root.querySelector('[data-cfg-design-step="1"]').focus();
+      minus.disabled = count <= 1;
+      root.querySelector('[data-cfg-status]').textContent = countLabel(count, 'design') + ', ' + money(amount) + ' for this booking.';
+      changed({render: false});
+    } else if (button.hasAttribute('data-cfg-play-video')) {
       const video = button.parentElement.querySelector('video');
       video.play().catch(() => {
         video.controls = true;
@@ -535,6 +561,7 @@ export function installConfig(root, { getUnits, getActiveId, setActive, changed 
       toggleAddon(unit, 'printer', input.value === 'print');
     } else if (key === 'customArtwork') {
       unit.customArtwork = input.value === 'custom';
+      root.querySelector('[data-cfg-designs]').hidden = !unit.customArtwork;
     } else if (input.hasAttribute('data-cfg-addon')) {
       toggleAddon(unit, input.value, input.checked);
       root.querySelector('[data-cfg-email-tip]').hidden = !unit.addons.includes('email');
