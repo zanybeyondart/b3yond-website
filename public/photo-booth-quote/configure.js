@@ -1,5 +1,5 @@
 import {
-  ADDONS, DELIVERY_OPTIONS, EXPERIENCES, RATE_CARD, SCREEN_SIZES, addonIncluded, addonPrice, generationInfo, getBooth,
+  ADDONS, DELIVERY_OPTIONS, EXPERIENCES, RATE_CARD, SCREEN_SIZES, VIDEO_RESOLUTIONS, VIDEO_SECONDS, addonIncluded, addonPrice, boothHireRate, generationInfo, getBooth,
   isLongDayOfferEligible, scheduleInfo, staffingInfo, transportInfo, validateUnit,
 } from './model.js';
 import { renderVenue, installVenue } from './venue.js';
@@ -55,7 +55,8 @@ function hourLabel(duration) {
 }
 
 const currency = new Intl.NumberFormat('en-AE', { maximumFractionDigits: 2 });
-const money = rate => RATE_CARD.currency + ' ' + currency.format(rate);
+const cents = new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = rate => RATE_CARD.currency + ' ' + (Number.isInteger(rate) ? currency : cents).format(rate);
 const dailyRate = rate => rate === 0 ? 'Included' : money(rate) + ' / day';
 
 function arrivalText(unit) {
@@ -81,7 +82,7 @@ function dailyText(unit) {
   if (hoursPerDay) {
     const overtime = Math.max(0, hoursPerDay - RATE_CARD.includedHours) * RATE_CARD.overtimeHour;
     const discount = unit.longDayOffer && isLongDayOfferEligible(unit) ? RATE_CARD.longDayDiscountDay : 0;
-    labels.push(money(RATE_CARD.boothDay[unit.type] + overtime - discount) + ' daily booth hire');
+    labels.push(money(boothHireRate(unit) + overtime - discount) + ' daily booth hire');
   }
   return labels.length ? labels.join(' · ') : '';
 }
@@ -111,7 +112,8 @@ const connectivity = {
 
 function preview(item) {
   if (item.id === 'aiVideo') {
-    return '<div class="cfg-preview"><video src="./assets/ai-video.mp4" controls playsinline preload="metadata" poster="./assets/video-poster.webp" aria-label="AI video experience sample">Your browser can open the <a href="./assets/ai-video.mp4">AI video sample</a>.</video></div>';
+    return '<div class="cfg-preview cfg-video-preview"><video src="./assets/ai-video-event-sample.mp4" controls playsinline preload="metadata" poster="./assets/ai-video-event-poster.webp" aria-label="AI video experience sample">Your browser can open the <a href="./assets/ai-video-event-sample.mp4">AI video sample</a>.</video>' +
+      '<button class="cfg-video-start" data-cfg-play-video type="button" aria-label="Play AI video sample"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15l13-7.5z"/></svg></button></div>';
   }
   const media = previews[item.id];
   const playing = !globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -124,7 +126,7 @@ function preview(item) {
 function experienceSection(unit) {
   const rates = {
     frame: 'Included in booth hire',
-    aiPhoto: money(RATE_CARD.aiPhotoRate) + ' / photo',
+    aiPhoto: money(RATE_CARD.aiPhotoRate) + ' digital · ' + money(RATE_CARD.aiPhotoPrintRate) + ' with one print',
     aiVideo: money(RATE_CARD.videoRate15Seconds['720p']) + ' at 720p · ' + money(RATE_CARD.videoRate15Seconds['1080p']) + ' at 1080p for 15 seconds',
   };
   const cards = EXPERIENCES.map(item => '<div class="cfg-experience-card">' + preview(item) +
@@ -134,14 +136,46 @@ function experienceSection(unit) {
     '</strong><span>' + escape(item.description) + '</span><span class="cfg-network">' + connectivity[item.id] +
     '</span><span class="cfg-rate">' + rates[item.id] + '</span></span></label></div>').join('');
   return '<section class="cfg-panel" aria-labelledby="cfg-exp-title"><h2 id="cfg-exp-title">Experience</h2><fieldset class="cfg-choice-list"><legend class="cfg-sr">Choose an experience</legend>' +
-    cards + '</fieldset>' + errorSlot('experience') + '</section>';
+    cards + '</fieldset>' + errorSlot('experience') + outputOptions(unit) + '</section>';
+}
+
+function videoPrice(unit, resolution) {
+  return money(generationInfo({...unit, experience: 'aiVideo', videoResolution: resolution}).unitPrice) + ' / video';
+}
+
+function outputOptions(unit) {
+  const withPrint = unit.addons.includes('printer');
+  const photoChoices = [
+    ['digital', 'Digital only', RATE_CARD.aiPhotoRate, !withPrint],
+    ['print', 'Digital + one print', RATE_CARD.aiPhotoPrintRate, withPrint],
+  ].map(([value, label, rate, selected]) =>
+    '<label class="cfg-staff-choice"><input type="radio" name="cfg-photo-output" data-cfg-field="photoOutput" value="' + value + '"' +
+    (selected ? ' checked' : '') + '><span><strong>' + label + '</strong><span class="cfg-rate">' + money(rate) + ' / photo</span></span></label>'
+  ).join('');
+  const equipment = addonIncluded('printer', unit.type) ? 'Printer hire is included with this Mirror Booth.' :
+    'Selecting prints adds on-site printer hire at ' + dailyRate(addonPrice('printer', unit.type)) + '.';
+  const resolutions = VIDEO_RESOLUTIONS.map(resolution =>
+    '<label class="cfg-staff-choice"><input type="radio" name="cfg-resolution" data-cfg-field="videoResolution" value="' + resolution +
+    '" aria-describedby="cfg-error-videoResolution"' + ((unit.videoResolution ?? '720p') === resolution ? ' checked' : '') +
+    '><span><strong>' + resolution + '</strong><span class="cfg-rate" data-cfg-video-price="' + resolution + '">' + videoPrice(unit, resolution) +
+    '</span></span></label>'
+  ).join('');
+  return '<div class="cfg-output-options" data-cfg-photo-format' + (unit.experience === 'aiPhoto' ? '' : ' hidden') +
+    '><fieldset class="cfg-plan-options"><legend>AI photo delivery</legend><div class="cfg-format-choices">' + photoChoices +
+    '</div></fieldset><p class="cfg-hint">' + equipment + '</p></div>' +
+    '<div class="cfg-output-options" data-cfg-video-format' + (unit.experience === 'aiVideo' ? '' : ' hidden') +
+    '><div class="cfg-video-settings"><fieldset class="cfg-plan-options"><legend>Video resolution</legend><div class="cfg-format-choices">' +
+    resolutions + '</div>' + errorSlot('videoResolution') + '</fieldset>' +
+    selectField(unit, 'videoSeconds', 'Length of each video', VIDEO_SECONDS.map(seconds => [seconds, seconds + ' seconds']), 15) +
+    '</div></div>';
 }
 
 function standSizeSection(unit) {
   if (unit.type !== 'classic') return '';
   const choices = SCREEN_SIZES.map(size => '<label class="cfg-size"><input type="radio" name="cfg-stand-size" data-cfg-field="screenSize" value="' +
-    size + '" aria-describedby="cfg-error-screenSize"' + ((unit.screenSize ?? 24) === size ? ' checked' : '') + '><span>' + size + '″</span></label>').join('');
-  return '<section class="cfg-panel" aria-labelledby="cfg-size-title"><div class="cfg-section-head"><h2 id="cfg-size-title">Display size</h2><span class="cfg-optional">Same hire rate for all sizes</span></div>' +
+    size + '" aria-describedby="cfg-error-screenSize"' + ((unit.screenSize ?? 24) === size ? ' checked' : '') + '><span><strong>' + size +
+    '″</strong><span class="cfg-rate">' + money(boothHireRate({...unit, screenSize: size})) + ' / day</span></span></label>').join('');
+  return '<section class="cfg-panel" aria-labelledby="cfg-size-title"><div class="cfg-section-head"><h2 id="cfg-size-title">Display size</h2><span class="cfg-optional">First ' + RATE_CARD.includedHours + ' hours included each day</span></div>' +
     '<fieldset class="cfg-sizes"><legend class="cfg-sr">Choose a display size in inches</legend>' + choices + '</fieldset>' + errorSlot('screenSize') + '</section>';
 }
 
@@ -175,9 +209,9 @@ function eventSection(units, unit) {
   const source = copySource(units, unit);
   const copy = source && (source.venue || source.startDate || source.startTime || source.endTime || source.endDate || source.earlySetup) ? '<button type="button" class="cfg-copy" data-cfg-copy>' + icon('copy') + 'Copy details from ' + escape(unitLabel(units, source)) + '</button>' : '';
   return '<section class="cfg-panel" aria-labelledby="cfg-event-title"><div class="cfg-section-head"><h2 id="cfg-event-title">Event details</h2>' + copy + '</div>' +
-    '<p class="cfg-hire-rate"><strong>' + money(RATE_CARD.boothDay[unit.type]) + '</strong> covers the first ' + RATE_CARD.includedHours +
+    '<p class="cfg-hire-rate"><strong data-cfg-hire-rate>' + money(boothHireRate(unit)) + '</strong> covers the first ' + RATE_CARD.includedHours +
     ' hours each day. Additional time is ' + money(RATE_CARD.overtimeHour) + ' per hour.' +
-    (unit.type === 'mirror' ? '<span>The Mirror package includes props, a branded frame and a welcome screen.</span>' : '') + '</p>' +
+    (unit.type === 'mirror' ? '<span>The Mirror package includes a branded frame and a welcome screen.</span>' : '') + '</p>' +
     renderVenue(unit) + '<p class="cfg-transport" data-cfg-transport>' + escape(transportLabel(unit)) + '</p>' +
     '<div class="cfg-input-grid">' + field(unit, 'startDate', 'Start date', 'date') +
     field(unit, 'endDate', 'End date', 'date', unit.startDate ? 'min="' + escape(unit.startDate) + '"' : '') + '</div><div class="cfg-input-grid">' +
@@ -245,10 +279,7 @@ function attendanceSection(units, unit) {
     (ai ? ' hidden' : '') + '>(optional)</span></label><input type="number" min="1" step="1" inputmode="numeric" id="cfg-expectedGuests" data-cfg-field="expectedGuests" value="' +
     escape(unit.expectedGuests) + '" aria-describedby="cfg-guest-hint cfg-error-expectedGuests"' + (ai ? ' required' : '') + '><p id="cfg-guest-hint" class="cfg-hint">' +
     guestHint + '</p>' + errorSlot('expectedGuests') + '</div>' +
-    '<div class="cfg-generation" data-cfg-generation' + (ai ? '' : ' hidden') + '><div class="cfg-input-grid cfg-video-format" data-cfg-video-format' +
-    (unit.experience === 'aiVideo' ? '' : ' hidden') + '>' +
-    selectField(unit, 'videoResolution', 'Video resolution', [['720p', '720p'], ['1080p', '1080p']], '720p') +
-    selectField(unit, 'videoSeconds', 'Length of each video', [[5, '5 seconds'], [10, '10 seconds'], [15, '15 seconds']], 15) + '</div>' +
+    '<div class="cfg-generation" data-cfg-generation' + (ai ? '' : ' hidden') + '>' +
     '<fieldset class="cfg-plan-options"><legend>AI generation plan</legend><div class="cfg-staff-options">' + modes + '</div></fieldset>' + errorSlot('aiMode') +
     '<div class="cfg-field cfg-allocation" data-cfg-allocation' + (mode === 'unlimited' ? ' hidden' : '') +
     '><label for="cfg-aiQuantity">Reserved quantity <span class="cfg-optional">(optional)</span></label><input type="number" min="1" step="1" inputmode="numeric" id="cfg-aiQuantity" data-cfg-field="aiQuantity" value="' +
@@ -261,19 +292,22 @@ function attendanceSection(units, unit) {
 
 const addonMedia = {
   printer: ['printer.webp', 'On-site photo printer for guest prints'],
+  props: ['photo-booth-props.webp', 'Photo booth props with colourful glasses, feather boas and signs'],
   queue: ['queue-setup.webp', 'Mirror photo booth beside a separate collection touchscreen'],
   stanchions: ['queue-barriers.webp', 'Queue posts and barriers for the guest line'],
 };
 
 function addonRow(unit, item) {
   const printNote = item.id === 'printer'
-    ? '<span data-cfg-print-note' + (unit.experience === 'aiVideo' ? '' : ' hidden') + '>For AI video, the printer produces a still image.</span>'
+    ? '<span data-cfg-print-note' + (unit.experience === 'aiVideo' ? '' : ' hidden') + '>For AI video, the printer produces a still image.</span>' +
+      '<span data-cfg-photo-print-note' + (unit.experience === 'aiPhoto' ? '' : ' hidden') + '>One print per AI photo costs ' +
+      money(RATE_CARD.aiPhotoPrintRate) + ' including generation.</span>'
     : '';
   const price = addonPrice(item.id, unit.type);
   const digital = ['qr', 'email'].includes(item.id);
-  const billing = digital ? money(price) + ' / setup' : dailyRate(price);
+  const billing = item.id === 'props' ? 'Free' : digital ? money(price) + ' / setup' : dailyRate(price);
   const inclusion = addonIncluded(item.id, unit.type) ? ' · Included in Mirror hire' : '';
-  const detail = digital ? ' · Wi-Fi required' : item.id === 'printer' && unit.type === 'mirror' ? ' · Unlimited still prints' : '';
+  const detail = digital ? ' · Wi-Fi required' : '';
   const rate = billing + inclusion + detail;
   const photo = addonMedia[item.id];
   const visual = photo ? '<img class="cfg-addon-photo" loading="lazy" src="./assets/' + photo[0] + '" alt="' + photo[1] + '">' :
@@ -397,10 +431,19 @@ export function showErrors(root, unit) {
 export function installConfig(root, { getUnits, getActiveId, setActive, changed }) {
   const activeUnit = () => getUnits().find(unit => unit.id === getActiveId()) ?? getUnits()[0];
   installVenue(root, {getUnit: activeUnit, changed: () => changed({render: true})});
+  function reflectPlayback(event) {
+    if (!event.target.matches('.cfg-video-preview video')) return;
+    event.target.parentElement.querySelector('[data-cfg-play-video]').hidden = event.type === 'play';
+  }
+  root.addEventListener('play', reflectPlayback, true);
+  root.addEventListener('ended', reflectPlayback, true);
   root.addEventListener('click', event => {
-    const button = event.target.closest('[data-cfg-unit], [data-cfg-copy], [data-cfg-add-screen], [data-cfg-preview]');
+    const button = event.target.closest('[data-cfg-unit], [data-cfg-copy], [data-cfg-add-screen], [data-cfg-preview], [data-cfg-play-video]');
     if (!button) return;
-    if (button.hasAttribute('data-cfg-preview')) {
+    if (button.hasAttribute('data-cfg-play-video')) {
+      const video = button.parentElement.querySelector('video');
+      video.play().catch(() => video.focus());
+    } else if (button.hasAttribute('data-cfg-preview')) {
       const id = button.dataset.cfgPreview;
       const media = previews[id];
       const playing = button.dataset.playing !== 'true';
@@ -446,10 +489,17 @@ export function installConfig(root, { getUnits, getActiveId, setActive, changed 
       root.querySelector('[data-cfg-addon][value="queue"]').click();
       return;
     }
+    if (key === 'photoOutput') {
+      const printer = root.querySelector('[data-cfg-addon][value="printer"]');
+      if (printer.checked !== (input.value === 'print')) printer.click();
+      return;
+    }
     if (input.hasAttribute('data-cfg-addon')) {
       unit.addons = [...root.querySelectorAll('[data-cfg-addon]:checked')].map(el => el.value);
       const hasScreen = unit.addons.includes('queue');
       root.querySelector('[data-cfg-field="planQueue"]').checked = hasScreen;
+      const photoOutput = unit.addons.includes('printer') ? 'print' : 'digital';
+      root.querySelector('[data-cfg-field="photoOutput"][value="' + photoOutput + '"]').checked = true;
       root.querySelector('[data-cfg-email-tip]').hidden = !unit.addons.includes('email');
       root.querySelector('[data-cfg-add-screen]').hidden = hasScreen;
       root.querySelector('[data-cfg-screen-selected]').hidden = !hasScreen;
@@ -485,8 +535,17 @@ export function installConfig(root, { getUnits, getActiveId, setActive, changed 
       const numeric = ['reportDayOffset', 'screenSize', 'additionalStaff', 'expectedGuests', 'aiQuantity', 'videoSeconds'].includes(key);
       unit[key] = numeric && input.value !== '' ? Number(input.value) : input.value;
       if (numeric && input.validity.badInput) unit[key] = -1;
+      if (key === 'screenSize') root.querySelector('[data-cfg-hire-rate]').textContent = money(boothHireRate(unit));
       if (key === 'experience') {
         root.querySelector('[data-cfg-print-note]').hidden = unit.experience !== 'aiVideo';
+        root.querySelector('[data-cfg-photo-print-note]').hidden = unit.experience !== 'aiPhoto';
+        root.querySelector('[data-cfg-photo-format]').hidden = unit.experience !== 'aiPhoto';
+        root.querySelector('[data-cfg-video-format]').hidden = unit.experience !== 'aiVideo';
+      }
+      if (key === 'videoSeconds') {
+        root.querySelectorAll('[data-cfg-video-price]').forEach(price => {
+          price.textContent = videoPrice(unit, price.dataset.cfgVideoPrice);
+        });
       }
       if (key === 'venue') {
         unit.venueEmirate = '';
@@ -507,7 +566,6 @@ export function installConfig(root, { getUnits, getActiveId, setActive, changed 
     root.querySelector('[data-cfg-ai-heading]').hidden = !ai;
     root.querySelector('[data-cfg-guests-optional]').hidden = ai;
     root.querySelector('#cfg-expectedGuests').required = ai;
-    root.querySelector('[data-cfg-video-format]').hidden = unit.experience !== 'aiVideo';
     root.querySelector('[data-cfg-allocation]').hidden = unit.aiMode === 'unlimited';
     root.querySelector('#cfg-aiQuantity').placeholder = unit.expectedGuests > 0 ? String(unit.expectedGuests) : 'One per expected guest';
     const estimate = root.querySelector('[data-cfg-estimate]');

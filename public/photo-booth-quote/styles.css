@@ -61,6 +61,14 @@ h1 span,#summary-title span{color:var(--accent)}
 .dlg-total{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 0 0}
 .dlg-total span{color:var(--muted);font-size:15px}
 .dlg-total strong{font-size:20px;letter-spacing:-.025em}
+.running-estimate{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px 16px;margin:0 0 18px;border:1px solid #b5d8dc;background:#edf8f8;color:#194b52;border-radius:9px;padding:12px 16px;box-shadow:0 2px 8px #163b410a}
+.estimate-price{display:flex;align-items:baseline;flex-wrap:wrap;gap:3px 10px}
+.estimate-price span{font-weight:500;font-size:.9375rem}
+.estimate-price strong{color:#105b66;font-size:1.25rem;font-variant-numeric:tabular-nums;letter-spacing:-.035em}
+.estimate-detail,.estimate-note{font-size:.8125rem;line-height:1.4;color:#49676c}
+.estimate-note{margin:3px 0 0}
+@media(max-width:680px){.running-estimate{padding:8px 12px;margin-bottom:12px;gap:2px 10px}.estimate-price strong{font-size:1.125rem}.estimate-detail{font-size:.765625rem}}
+html:has(.running-estimate:not([hidden])){scroll-padding-top:5.5rem}
 @media(max-width:680px){.starting-rate{gap:4px;margin-bottom:10px}.starting-rate strong{font-size:1rem}.starting-rate span{font-size:.78rem}.card-image:has(img[src*="classic"]),.card-image:has(img[src*="grand"]){background:white}.card-image img[src*="classic"],.card-image img[src*="grand"]{object-fit:contain}}
 .add-btn,.quantity{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:44px;border:1px solid #c7d8da;border-radius:6px;background:#fff;padding:0 13px;font-size:14px;font-weight:600}
 .add-btn:hover{background:#edf6f6;border-color:#7d9fa2}
