@@ -133,3 +133,18 @@
   .cfg-field select { padding-right: 25px; }
   .cfg-addon .cfg-symbol { display: none; }
 }
+.cfg-generation { display: grid; gap: 16px; margin-top: 18px; }
+.cfg-guests input, .cfg-allocation input { max-width: 240px; }
+.cfg-plan-options { padding: 0; border: 0; min-width: 0; margin: 0; }
+.cfg-plan-options legend { padding: 0; margin-bottom: 8px; font-size: .95rem; font-weight: 650; }
+.cfg-video-format { margin-top: 0; max-width: 510px; }
+.cfg-estimate { display: grid; gap: 5px; padding: 14px 16px; background: var(--cfg-tint); border-left: 3px solid var(--cfg-accent); border-radius: 5px; }
+.cfg-estimate p { margin: 0; color: var(--cfg-muted); font-size: .875rem; line-height: 1.5; }
+.cfg-estimate-head { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: baseline; justify-content: space-between; font-size: .96rem; font-weight: 650; line-height: 1.5; }
+.cfg-estimate-head span { color: var(--cfg-accent-ink); }
+.cfg-shift { margin-top: 18px; border-top: 1px solid var(--cfg-line); padding-top: 16px; }
+.cfg-shift > strong { font-size: .98rem; }
+.cfg-shift > .cfg-hint { margin-top: 5px; }
+.cfg-shift-fields { margin: 5px 0; max-width: 320px; }
+.cfg-staff-estimate { font-size: .9rem; line-height: 1.5; font-weight: 600; color: var(--cfg-accent-ink); margin: 8px 0 0; }
+.cfg-field label .cfg-optional { font-weight: 400; }

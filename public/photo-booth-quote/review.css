@@ -22,6 +22,9 @@
 .rv-details div { display: grid; grid-template-columns: minmax(95px,.55fr) minmax(0,1fr); gap: 12px; font-size: .9rem; line-height: 1.4; }
 .rv-details dt, .rv-rate { color: var(--rv-muted); }
 .rv-details dd { font-weight: 500; overflow-wrap: anywhere; }
+.rv-production { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--rv-rule); }
+.rv-capacity-note { padding: 8px 10px; border-left: 2px solid var(--rv-teal); background: var(--rv-wash); color: var(--rv-ink); font-size: .87rem; line-height: 1.4; }
+.rv-stack .rv-capacity-note { margin-top: 10px; }
 .rv-lines { border-collapse: collapse; width: 100%; font-size: .9rem; color: var(--rv-ink); }
 .rv-lines th, .rv-lines td { text-align: start; padding: 9px 8px; font-weight: 450; vertical-align: top; }
 .rv-lines th:last-child, .rv-lines td:last-child { text-align: end; }
@@ -69,9 +72,15 @@
   .rv-sheet .rv-details { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1.3mm 6mm; }
   .rv-sheet .rv-details div { grid-template-columns: 23mm minmax(0,1fr); gap: 1mm; font-size: 9pt; line-height: 1.28; }
   .rv-sheet .rv-details dt { color: var(--rv-muted); }
+  .rv-sheet .rv-production { margin: 2mm 0 0; padding: 0; border: 0; }
+  .rv-sheet .rv-production .rv-details div:nth-child(3) { grid-column: span 2; }
+  .rv-sheet .rv-capacity-note { padding: 1mm 2mm; margin: 1mm 0 0; font-size: 8.5pt; }
   .rv-sheet .rv-lines { font-size: 9.5pt; }
   .rv-sheet .rv-lines th, .rv-sheet .rv-lines td { padding: 1.1mm 1.6mm; }
   .rv-sheet .rv-lines thead th { font-size: 8.5pt; }
+  .rv-sheet-compact .rv-details { row-gap: .8mm; }
+  .rv-sheet-compact .rv-details div { font-size: 8.75pt; line-height: 1.23; }
+  .rv-sheet-compact .rv-lines th, .rv-sheet-compact .rv-lines td { padding-block: .8mm; }
   .rv-sheet .rv-rate { display: inline; font-size: inherit; }
   .rv-sheet .rv-tally { margin: 2mm 0 0 auto; max-width: 113mm; gap: 1.15mm; }
   .rv-sheet .rv-tally-line { font-size: 9pt; }

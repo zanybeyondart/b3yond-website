@@ -173,7 +173,7 @@ document.addEventListener('click',event => {
     if (!unit) return;
     const initialAddons = createUnit(unit.type,unit.id).addons;
     const editedAddons = initialAddons.length !== unit.addons.length || unit.addons.some(addon => !initialAddons.includes(addon));
-    if (unit.experience || unit.venue || unit.startDate || unit.endDate || unit.startTime || unit.endTime || unit.earlySetup || unit.venueEmirate || unit.additionalStaff || unit.staffing === 'b3yond' || unit.screenSize > 24 || editedAddons) {
+    if (unit.experience || unit.expectedGuests || unit.venue || unit.startDate || unit.endDate || unit.startTime || unit.endTime || unit.earlySetup || unit.venueEmirate || unit.additionalStaff || unit.staffing === 'b3yond' || unit.screenSize > 24 || editedAddons) {
       removal = unit;
       openDialog('Remove booth','<p class="dialog-body">Remove '+escape(unitLabel(unit))+' and its saved event details from this quotation?</p><div class="dlg-actions"><button class="dialog-btn" data-action="close-summary">Keep booth</button><button class="dialog-btn primary" data-action="confirm-remove">Remove booth</button></div>');
     } else remove(unit);
