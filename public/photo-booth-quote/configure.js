@@ -124,17 +124,12 @@ function preview(item) {
 }
 
 function experienceSection(unit) {
-  const rates = {
-    frame: 'Included in booth hire',
-    aiPhoto: money(RATE_CARD.aiPhotoRate) + ' digital · ' + money(RATE_CARD.aiPhotoPrintRate) + ' with one print',
-    aiVideo: money(RATE_CARD.videoRate15Seconds['720p']) + ' at 720p · ' + money(RATE_CARD.videoRate15Seconds['1080p']) + ' at 1080p for 15 seconds',
-  };
   const cards = EXPERIENCES.map(item => '<div class="cfg-experience-card">' + preview(item) +
     '<label class="cfg-experience-option"><input type="radio" name="cfg-experience" data-cfg-field="experience" value="' +
     escape(item.id) + '" aria-describedby="cfg-error-experience"' + (unit.experience === item.id ? ' checked' : '') + '>' +
     '<span class="cfg-choice-text"><strong>' + escape(item.name) +
-    '</strong><span>' + escape(item.description) + '</span><span class="cfg-network">' + connectivity[item.id] +
-    '</span><span class="cfg-rate">' + rates[item.id] + '</span></span></label></div>').join('');
+    '</strong><span>' + escape(item.description) + '</span><span class="cfg-network">' + connectivity[item.id] + '</span>' +
+    (item.id === 'frame' ? '<span class="cfg-rate">Included in booth hire</span>' : '') + '</span></label></div>').join('');
   return '<section class="cfg-panel" aria-labelledby="cfg-exp-title"><h2 id="cfg-exp-title">Experience</h2><fieldset class="cfg-choice-list"><legend class="cfg-sr">Choose an experience</legend>' +
     cards + '</fieldset>' + errorSlot('experience') + outputOptions(unit) + '</section>';
 }
