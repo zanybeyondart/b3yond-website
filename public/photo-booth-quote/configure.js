@@ -244,13 +244,9 @@ function generationEstimate(unit) {
   const output = unit.experience === 'aiVideo' ? 'video' : 'photo';
   const formula = info.amount == null ? money(info.unitPrice) + ' / ' + output :
     countLabel(info.quantity, output) + ' × ' + money(info.unitPrice) + ' = ' + money(info.amount);
-  const capacity = info.capacity == null ? 'Set the event schedule to estimate capacity.' :
-    'Estimated capacity is ' + countLabel(info.capacity, 'session') + ' across the booking (' + info.cycleSeconds + ' seconds each).';
-  const shortfall = info.guestShortfall > 0 ? '<p class="cfg-shortfall">Around ' + countLabel(info.guestShortfall, 'guest') +
-    ' may miss a turn. ' + (unit.addons.includes('queue') ? 'Allow more time or split guests between booths.' :
-    'Add a collection screen or allow more time.') + '</p>' : '';
-  return '<div class="cfg-estimate-head"><strong>AI generation</strong><span>' + escape(formula) + '</span></div><p>' +
-    escape(capacity) + '</p>' + shortfall;
+  const capacity = info.capacity == null ? 'Capacity depends on the event schedule' :
+    'Estimated capacity ' + countLabel(info.capacity, 'session');
+  return '<span>' + escape(capacity) + '</span><strong>' + escape(formula) + '</strong>';
 }
 
 function selectField(unit, key, label, choices, initial) {
@@ -262,8 +258,11 @@ function selectField(unit, key, label, choices, initial) {
 
 function expectedGuestsField(units, unit) {
   const ai = isAi(unit);
-  const guestHint = units.length > 1 ? 'Enter this booth’s share of guests across all event days.' : 'Total across all event days.';
-  return '<div class="cfg-field cfg-guests"><label for="cfg-expectedGuests">Expected guests at this booth <span class="cfg-optional" data-cfg-guests-optional' +
+  const multiple = units.length > 1;
+  const label = multiple ? 'Expected guests for this booth' : 'Expected event attendance';
+  const guestHint = multiple ? 'Enter this booth’s total across all event days. Split attendance across booths if each guest should count once.' :
+    'Use the event headcount across all days.';
+  return '<div class="cfg-field cfg-guests"><label for="cfg-expectedGuests">' + label + ' <span class="cfg-optional" data-cfg-guests-optional' +
     (ai ? ' hidden' : '') + '>(optional)</span></label><input type="number" min="1" step="1" inputmode="numeric" id="cfg-expectedGuests" data-cfg-field="expectedGuests" value="' +
     escape(unit.expectedGuests) + '" aria-describedby="cfg-guest-hint cfg-error-expectedGuests"' + (ai ? ' required' : '') + '><p id="cfg-guest-hint" class="cfg-hint">' +
     guestHint + '</p>' + errorSlot('expectedGuests') + '</div>';
@@ -274,8 +273,8 @@ function attendanceSection(units, unit) {
   const mode = unit.aiMode ?? 'fixed';
   const queuedCycle = generationInfo({...unit, addons: ['queue']}).cycleSeconds;
   const modes = [
-    ['fixed', 'One per guest', 'Priced for the guest count above.'],
-    ['unlimited', 'Unlimited', 'Priced for maximum sessions during event hours.'],
+    ['fixed', 'One per guest', 'Priced using the guest count you enter.'],
+    ['unlimited', 'Unlimited', 'Priced using booth capacity during event hours.'],
   ].map(([value, label, description]) => '<label class="cfg-staff-choice"><input type="radio" name="cfg-ai-mode" data-cfg-field="aiMode" value="' +
     value + '" aria-describedby="cfg-error-aiMode"' + (mode === value ? ' checked' : '') + '><span><strong>' + label +
     '</strong><span class="cfg-hint">' + description + '</span></span></label>').join('');

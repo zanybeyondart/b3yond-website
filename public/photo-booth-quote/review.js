@@ -97,26 +97,25 @@ function productionPlan(unit) {
   const ai = generationInfo(unit);
   const schedule = scheduleInfo(unit);
   const video = unit.experience === 'aiVideo';
-  const output = video ? 'video' : 'photo';
   const seconds = Number(unit.videoSeconds ?? 15);
   const format = video
     ? (unit.videoResolution || '720p') + ', ' + seconds + ' seconds'
     : (ai.photoWithPrint ? 'Digital photo and one print per photo' : 'Digital photo only');
-  const basis = ai.mode === 'unlimited' ? 'Unlimited during booked hours' : 'One ' + output + ' per expected guest';
+  const basis = ai.mode === 'unlimited' ? 'Unlimited, priced by operating capacity' : 'Priced by estimated attendance';
   const queue = unit.addons?.includes('queue') ? 'with queue management' : 'without queue management';
-  const capacity = count(ai.capacityPerDay, output) + '/day' +
-    (schedule.days > 1 ? ' × ' + count(schedule.days, 'day') + ' = ' + count(ai.capacity, output) : '') +
-    ' at ' + count(ai.cycleSeconds, 'second') + ' per session ' + queue;
+  const timing = count(ai.cycleSeconds, 'second') + ' per session ' + queue +
+    (schedule.days > 1 ? ' · ' + count(ai.capacityPerDay, 'session') + '/day × ' + count(schedule.days, 'day') : '');
+  const attendance = ai.expectedGuests == null ? 'Attendance to confirm' : 'Estimated attendance is ' + count(ai.expectedGuests, 'guest');
+  const capacity = ai.capacity == null ? 'Capacity depends on the event schedule.' :
+    'The booked hours allow approximately ' + count(ai.capacity, 'session') + '.';
   const facts = [
-    ['Guests', count(ai.expectedGuests, 'guest') + ' over the booking'],
     ['AI plan', basis + ' · ' + format],
-    ['Estimated capacity', capacity],
+    ['Session timing', timing],
+    ['Attendance and capacity', attendance + '. ' + capacity],
   ];
-  const capacityNote = ai.guestShortfall > 0 ? 'At one ' + output + ' per guest, approximately ' +
-    count(ai.guestShortfall, 'guest') + ' would exceed the estimated booth capacity.' : '';
   return '<section class="rv-production"><h3>Guest experience</h3><dl class="rv-details">' +
     facts.map(([label, value]) => '<div><dt>' + escape(label) + '</dt><dd>' + escape(value) + '</dd></div>').join('') +
-    '</dl>' + (capacityNote ? '<p class="rv-capacity-note">' + escape(capacityNote) + '</p>' : '') + '</section>';
+    '</dl></section>';
 }
 function detailList(unit, includeHeader = true) {
   return '<dl class="rv-details">' + details(unit, includeHeader).map(([label, value]) =>
@@ -173,7 +172,7 @@ function terms(units, collapsed = false) {
     ['Payment', '50% in advance and 50% on delivery.'],
   ];
   if (units.some(unit => ['aiPhoto', 'aiVideo'].includes(unit.experience))) {
-    policies.splice(3, 0, ['AI output', 'The guest plan covers one output per expected guest at each booth. Unlimited pricing uses the estimated capacity during booked hours. Actual output depends on participation and operating conditions.']);
+    policies.splice(3, 0, ['AI sessions', 'Actual booth participation may vary. A session for every attendee cannot be guaranteed within the booked hours.']);
   }
   if (units.some(unit => unit.experience === 'aiPhoto' && unit.addons?.includes('printer'))) {
     policies.splice(4, 0, ['AI photo prints', 'Printed AI photos include one print per generation. Mirror Booth hire includes the printer. The Display Stand printer package includes email setup when selected.']);

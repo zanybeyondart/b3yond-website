@@ -141,10 +141,9 @@
   .cfg-video-settings .cfg-field { max-width: 240px; }
   .cfg-format-choices .cfg-staff-choice { gap: 7px; padding: 10px; }
 }
-.cfg-estimate { display: grid; gap: 5px; padding: 14px 16px; background: var(--cfg-tint); border-left: 3px solid var(--cfg-accent); border-radius: 5px; }
-.cfg-estimate p { margin: 0; color: var(--cfg-muted); font-size: .875rem; line-height: 1.5; }
-.cfg-estimate-head { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: baseline; justify-content: space-between; font-size: .96rem; font-weight: 650; line-height: 1.5; }
-.cfg-estimate-head span { color: var(--cfg-accent-ink); }
+.cfg-estimate { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 15px; padding: 12px 15px; background: var(--cfg-tint); border-left: 3px solid var(--cfg-accent); border-radius: 5px; font-size: .9rem; line-height: 1.45; }
+.cfg-estimate > span { color: var(--cfg-muted); }
+.cfg-estimate > strong { color: var(--cfg-accent-ink); font-variant-numeric: tabular-nums; }
 .cfg-shift { margin-top: 18px; border-top: 1px solid var(--cfg-line); padding-top: 16px; }
 .cfg-shift > strong { font-size: .98rem; }
 .cfg-shift > .cfg-hint { margin-top: 5px; }
@@ -177,7 +176,6 @@
 .cfg-design-count output { min-width: 28px; padding: 0 3px; text-align: center; font-size: 1rem; font-weight: 650; font-variant-numeric: tabular-nums; }
 .cfg-design-total { border-top: 1px solid var(--cfg-line); padding-top: 9px; font-size: .875rem; color: var(--cfg-accent-ink); }
 .cfg-design-total strong { font-variant-numeric: tabular-nums; }
-.cfg-estimate .cfg-shortfall { color: #884819; }
 .cfg[data-cfg-part="3"] { gap: 9px; }
 @media (max-width: 450px) {
   .cfg-sizes { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; }

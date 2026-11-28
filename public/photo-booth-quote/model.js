@@ -191,7 +191,8 @@ export function generationInfo(unit, rates = RATE_CARD) {
   }
   const amount = quantity === null || unitPrice === null ? null : money(quantity * unitPrice);
   const guestShortfall = expectedGuests === null || capacity === null ? null : Math.max(0, expectedGuests - capacity);
-  const overCapacity = ai && mode === 'fixed' && guestShortfall > 0;
+  // Attendance includes guests who may never use the booth. Capacity is advisory for both plans.
+  const overCapacity = ai && guestShortfall > 0;
   return { mode, expectedGuests, cycleSeconds, capacityPerDay, capacity, quantity, unitPrice, amount, overCapacity, guestShortfall, photoWithPrint };
 }
 
@@ -229,16 +230,11 @@ export function validateUnit(unit) {
   if (!EXPERIENCES.some(item => item.id === unit.experience)) errors.experience = 'Choose an experience.';
   const ai = unit.experience === 'aiPhoto' || unit.experience === 'aiVideo';
   if ((ai || !blank(unit.expectedGuests)) && positiveCount(unit.expectedGuests) === null) {
-    errors.expectedGuests = 'Enter the expected number of guests for this booth as a positive whole number.';
+    errors.expectedGuests = 'Enter the number of guests as a positive whole number.';
   }
   if (ai) {
     const generation = generationInfo(unit);
     if (!['fixed', 'unlimited'].includes(generation.mode)) errors.aiMode = 'Choose a generation plan.';
-    if (generation.overCapacity) {
-      const hasQueue = Array.isArray(unit.addons) && unit.addons.includes('queue');
-      const options = hasQueue ? 'Extend the event or divide guests between booths.' : 'Add queue management, extend the event, or divide guests between booths.';
-      errors.expectedGuests = 'This booth can serve up to ' + generation.capacity.toLocaleString('en-AE') + ' guests during the booked hours. ' + options;
-    }
     if (unit.experience === 'aiVideo') {
       if (!VIDEO_RESOLUTIONS.includes(unit.videoResolution ?? '720p')) errors.videoResolution = 'Choose 720p or 1080p.';
       if (!VIDEO_SECONDS.includes(Number(unit.videoSeconds ?? 15))) errors.videoSeconds = 'Choose a 5, 10 or 15-second video.';
@@ -325,7 +321,7 @@ export function priceUnit(unit, rates = RATE_CARD) {
     const format = video
       ? ' (' + (unit.videoResolution ?? '720p') + ', ' + (unit.videoSeconds ?? 15) + 's)'
       : (generation.photoWithPrint ? ' + one print' : ' (digital only)');
-    const plan = generation.mode === 'unlimited' ? 'unlimited during booked hours' : 'one per expected guest';
+    const plan = generation.mode === 'unlimited' ? 'unlimited during booked hours' : 'based on estimated attendance';
     lines.push(line(experience.name + format + ' · ' + plan, generation.quantity, generation.unitPrice, video ? 'video' : 'photo'));
   }
 
