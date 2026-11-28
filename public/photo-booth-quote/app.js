@@ -1,4 +1,4 @@
-import {ADDONS, BOOTHS, DELIVERY_OPTIONS, RATE_CARD, artworkPricing, boothHireRate, createUnit, getBooth, quoteEstimate, validateUnit} from './model.js';
+import {ADDONS, BOOTHS, DELIVERY_OPTIONS, RATE_CARD, artworkPricing, boothHireRate, createUnit, generationInfo, getBooth, quoteEstimate, validateUnit} from './model.js';
 import {renderConfig, installConfig, partForField, showErrors} from './configure.js';
 import {renderReview, renderPrint} from './review.js';
 
@@ -52,6 +52,7 @@ function restore() {
       const legacy = saved.step >= 2 ? (firstErrorPart(unit) ?? 3) : 0;
       const validPart = x => Number.isInteger(x) && x >= 0 && x <= 3;
       const progress = {
+        capacitySeen:typeof old?.capacitySeen === 'string' ? old.capacitySeen : '',
         furthest:validPart(old?.furthest) ? old.furthest : legacy,
         finished:old ? old.finished === true : legacy === 3 && isComplete(unit),
       };
@@ -67,6 +68,7 @@ function restore() {
 }
 const state = restore();
 let removal = null;
+let pendingCapacity = null;
 let storageWorking = true;
 
 function save() {
@@ -166,6 +168,9 @@ function recordRoute(replace=false) {
 function go(step,id,part,withHistory=true) {
   if (step > 1 && !state.units.length) step = 1;
   if (step === 3 && !canReview()) return;
+  if (withHistory && step === 3 && state.units.some(unit =>
+    showCapacityNotice(unit,() => go(3,id,part))
+  )) return;
   if (id && state.units.some(u => u.id === id)) state.activeId = id;
   if (step === 2) {
     const u = activeUnit() ?? state.units[0];
@@ -208,6 +213,23 @@ function openDialog(heading,markup) {
   byId('dialog-content').innerHTML = markup;
   if (!dialog.open) dialog.showModal();
 }
+function showCapacityNotice(unit, proceed) {
+  const info = generationInfo(unit);
+  if (!info.overCapacity) return false;
+  const signature = [unit.experience,info.mode,info.expectedGuests,info.capacity].join('/');
+  if (state.guide[unit.id].capacitySeen === signature) return false;
+  const attendees = info.expectedGuests.toLocaleString('en-AE');
+  const sessions = info.capacity.toLocaleString('en-AE');
+  const name = state.units.length > 1 ? unitLabel(unit) : getBooth(unit.type).name;
+  pendingCapacity = {id:unit.id,signature,proceed};
+  openDialog('A note on booth capacity',
+    '<p class="dialog-body">For '+escape(name)+', you entered <strong>'+attendees+' guests</strong>. '+
+    'The booked hours allow for about <strong>'+sessions+' '+(info.capacity === 1 ? 'session' : 'sessions')+'</strong>.</p>'+
+    '<p class="dialog-body">Some guests may skip the booth. If everyone takes part, there may be too little time for each guest to have a turn.</p>'+
+    '<div class="dlg-actions"><button type="button" class="dialog-btn" data-action="close-summary">Go back</button>'+
+    '<button type="button" class="dialog-btn primary" data-action="continue-capacity">Continue with this setup</button></div>');
+  return true;
+}
 function showSummary() {
   const types = [...new Set(state.units.map(u => u.type))];
   const selected = types.map(id => ({...getBooth(id),count:state.units.filter(u => u.type === id).length}));
@@ -239,6 +261,7 @@ async function next() {
       showErrors(pane,current,invalid);
       return;
     }
+    if (progress.part >= 2 && showCapacityNotice(current,next)) return;
     const nextPart = guideParts(current).find(part => part > progress.part);
     if (nextPart !== undefined) {
       progress.furthest = Math.max(progress.furthest,nextPart);
@@ -277,6 +300,16 @@ document.addEventListener('click',event => {
     } else remove(unit);
   }
   if (action === 'confirm-remove' && removal) {const unit = removal;dialog.close();remove(unit);}
+  if (action === 'continue-capacity' && pendingCapacity) {
+    const {id:unitId,signature,proceed} = pendingCapacity;
+    pendingCapacity = null;
+    dialog.close();
+    if (state.guide[unitId]) {
+      state.guide[unitId].capacitySeen = signature;
+      save();
+      proceed();
+    }
+  }
   if (action === 'summary') showSummary();
   if (action === 'close-summary') dialog.close();
   if (action === 'new-quote') {
@@ -295,10 +328,18 @@ document.addEventListener('click',event => {
     }
   }
   if (action === 'next') next();
-  if (action === 'stage' && !trigger.hasAttribute('aria-current')) go(Number(trigger.dataset.step),null,trigger.hasAttribute('data-part') ? Number(trigger.dataset.part) : undefined);
+  if (action === 'stage' && !trigger.hasAttribute('aria-current')) {
+    const step = Number(trigger.dataset.step);
+    const part = trigger.hasAttribute('data-part') ? Number(trigger.dataset.part) : undefined;
+    const navigate = () => go(step,null,part);
+    if (step === 2 && part === 3 && showCapacityNotice(activeUnit(),navigate)) return;
+    navigate();
+  }
   if (action === 'edit-unit') go(2,id,0);
 });
-dialog.addEventListener('close',() => {removal = null;});
+dialog.addEventListener('close',() => {
+  if (!dialog.open) {removal = null;pendingCapacity = null;}
+});
 dialog.addEventListener('click',e => {
   if (e.target !== dialog) return;
   const b = dialog.getBoundingClientRect();
@@ -307,6 +348,7 @@ dialog.addEventListener('click',e => {
 window.addEventListener('popstate',event => {
   const dest = event.state;
   if (!dest?.quoteGuide) return;
+  if (dialog.open) dialog.close();
   if ((dest.id && !state.units.some(unit => unit.id === dest.id)) || !state.units.length) go(1,null,null,false);
   else if (dest.step === 3 && !canReview()) go(2,null,undefined,false);
   else go(dest.step,dest.id,dest.part,false);
