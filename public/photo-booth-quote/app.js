@@ -390,3 +390,6 @@ pane.addEventListener('input',event=>{
 render();
 recordRoute(true);
 
+save();
+render();
+recordRoute(true);
