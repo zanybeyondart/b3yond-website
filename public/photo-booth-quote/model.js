@@ -285,11 +285,12 @@ export function hirePricing(unit, rates = RATE_CARD) {
   const premium = unit.type === 'classic' ? (rates.displaySizePremiumDay?.[unit.screenSize ?? 24] ?? 0) : 0;
   const cap8 = rates.fullDay8?.[unit.type];
   const cap12 = rates.fullDay12?.[unit.type];
-  if (base === null || hoursPerDay === null || !validRate(cap8) || !validRate(cap12)) {
+  if (base === null || !validRate(cap8) || !validRate(cap12)) {
     return {daily:null, discount:null, total:null};
   }
   let daily;
-  if (hoursPerDay <= 8) daily = Math.min(base + Math.max(0, hoursPerDay - rates.includedHours) * rates.overtimeHour, cap8 + premium);
+  if (hoursPerDay === null) daily = base;
+  else if (hoursPerDay <= 8) daily = Math.min(base + Math.max(0, hoursPerDay - rates.includedHours) * rates.overtimeHour, cap8 + premium);
   else if (hoursPerDay <= 12) daily = cap8 + premium + (hoursPerDay - 8) * rates.extendedDayHour;
   else daily = cap12 + premium + (hoursPerDay - 12) * rates.overtimeHour;
   daily = money(daily);
