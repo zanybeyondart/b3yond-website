@@ -10,12 +10,21 @@
 .rv-panel, .rv-total, .rv-stack .rv-terms {
   border: 1px solid var(--rv-rule); border-radius: 12px; background: white; color: var(--rv-ink);
 }
-.rv-head { display: flex; align-items: center; gap: 15px; padding: 18px 24px; border-bottom: 1px solid var(--rv-rule); }
+.rv-head { display: flex; align-items: center; gap: 15px; padding: 18px 24px 0; }
 .rv-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; background: var(--rv-wash); }
 .rv-head h2 { font-size: 1.3rem; letter-spacing: -.035em; }
+.rv-head p, .rv-panel .rv-booking { font-size: .92rem; color: var(--rv-muted); line-height: 1.45; overflow-wrap: anywhere; }
+.rv-panel .rv-booking { padding: 12px 24px 17px; }
 .rv-edit { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; margin-left: auto; background: white; color: var(--rv-teal); border: 1px solid var(--rv-rule); padding: 7px 13px; border-radius: 7px; font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; }
 .rv-edit:hover { background: var(--rv-wash); }
 .rv-columns, .rv-total { display: grid; grid-template-columns: minmax(0,.9fr) minmax(0,1.1fr); align-items: start; gap: clamp(26px,5vw,72px); padding: 24px; }
+.rv-disclosure summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; padding: 12px 24px; cursor: pointer; color: var(--rv-ink); font-weight: 600; list-style: none; }
+.rv-disclosure summary::-webkit-details-marker { display: none; }
+.rv-disclosure summary::after { content: ''; flex-shrink: 0; width: 8px; height: 8px; margin-right: 3px; border: solid var(--rv-teal); border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-2px); }
+.rv-disclosure[open] > summary::after { transform: rotate(225deg) translate(-1px,-1px); }
+.rv-disclosure summary:focus-visible { outline: 3px solid var(--rv-teal); outline-offset: -4px; border-radius: 7px; }
+.rv-booth-details { border-top: 1px solid var(--rv-rule); }
+.rv-booth-details .rv-columns { padding-top: 8px; }
 .rv-columns section { min-width: 0; }
 .rv-columns h3 { font-size: 1rem; margin-bottom: 17px; color: var(--rv-teal); }
 .rv-details { display: grid; gap: 10px; }
@@ -35,7 +44,10 @@
 .rv-lines tfoot { border-top: 1px solid var(--rv-rule); color: var(--rv-teal); }
 .rv-lines tfoot th, .rv-lines tfoot td { font-weight: 700; }
 .rv-rate { display: block; font-size: .85em; white-space: nowrap; }
-.rv-total h2, .rv-terms h2 { font-size: 1.15rem; }
+.rv-total { border-color: #accdd0; background: #eff7f7; }
+.rv-total h2 { font-size: .98rem; color: var(--rv-teal); }
+.rv-total strong { display: block; margin-top: 3px; font-size: clamp(1.8rem,4vw,2.65rem); line-height: 1.12; letter-spacing: -.055em; font-variant-numeric: tabular-nums; }
+.rv-terms h2 { font-size: 1.15rem; }
 .rv-total p { color: var(--rv-muted); font-size: .9rem; margin-top: 5px; }
 .rv-tally, .rv-tally dd, .rv-terms dl, .rv-terms dd { margin: 0; }
 .rv-tally { display: grid; gap: 9px; }
@@ -43,16 +55,21 @@
 .rv-tally-line dd { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .rv-tally-line small { display: block; color: var(--rv-muted); font-size: .85em; margin-top: 2px; }
 .rv-tally-total { border-top: 2px solid var(--rv-teal); padding-top: 12px; font-weight: 700; font-size: 1.1rem; color: var(--rv-teal); }
-.rv-stack .rv-terms { padding: 24px; }
+.rv-stack .rv-terms dl { padding: 0 24px 22px; margin-top: 5px; }
 .rv-terms dl { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px 32px; margin-top: 14px; }
 .rv-terms dl div { font-size: .9rem; line-height: 1.45; }
 .rv-terms dt { font-weight: 700; }
 .rv-terms dd { margin-top: 2px; color: var(--rv-muted); }
 #print-view { display: none; }
 @media(max-width: 720px) {
-  .rv-head { padding: 15px 18px; }
+  .rv-head { padding: 15px 18px 0; gap: 10px; }
+  .rv-thumb { width: 42px; height: 42px; }
+  .rv-head h2 { font-size: 1.13rem; }
+  .rv-edit { padding: 6px 10px; }
+  .rv-panel .rv-booking { padding: 10px 18px 14px; }
   .rv-columns, .rv-total { grid-template-columns: 1fr; padding: 18px; gap: 22px; }
-  .rv-stack .rv-terms { padding: 18px; }
+  .rv-disclosure summary { padding-inline: 18px; }
+  .rv-stack .rv-terms dl { padding: 0 18px 18px; }
   .rv-terms dl { grid-template-columns: 1fr; }
   .rv-lines td, .rv-lines th { padding-inline: 4px; }
 }
