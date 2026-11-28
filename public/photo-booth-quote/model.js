@@ -46,7 +46,7 @@ export const RATE_CARD = {
   videoRate10Seconds: { '720p': 6, '1080p': 12 },
   overtimeHour: 400,
   earlySetupHour: 100,
-  addonDay: { queue: 350, stanchions: 150, printer: 350, props: 0 },
+  addonDay: { queue: 500, stanchions: 150, printer: 350, props: 0 },
   displayPrinterDay: 200,
   deliverySetup: { qr: 100, email: 150 },
   promoterHour: 75,
