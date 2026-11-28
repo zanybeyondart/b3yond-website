@@ -41,3 +41,13 @@ test('High volume and unusual staffing require review without falsifying stored 
  const oldQuote={...priceQuote([unit()]),pricingPolicyVersion:undefined,requiresReview:false,total:19280};oldQuote.units[0].lines.find(line=>line.unit==='photo').quantity=4320;oldQuote.units[0].lines.find(line=>line.unit==='photo').label='AI photo · unlimited during booked hours';
  const historical=renderPrint([unit({aiMode:'unlimited'})],2,{quote:oldQuote,createdAt:'2026-11-01T00:00:00Z'});assert.match(historical,/19,280/);assert.match(historical,/4,320/);assert.match(historical,/Unlimited during booked hours/);assert.ok(!historical.includes('15% off hire'));
 });
+
+test('Incomplete schedules show the starting hire while remaining provisional',()=>{
+ const empty=createUnit('mirror');
+ assert.equal(quoteEstimate([empty]).amount,1800);
+ assert.equal(quoteEstimate([empty]).incomplete,true);
+ assert.equal(quoteEstimate([createUnit('classic')]).amount,1400);
+ const dated=unit({startTime:'',endTime:''});
+ assert.equal(quoteEstimate([dated]).amount,1800*1.85+900+1000+400);
+ assert.equal(priceQuote([dated]).total,null);
+});
