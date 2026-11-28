@@ -97,7 +97,7 @@ function productionPlan(unit) {
   const format = video
     ? (unit.videoResolution || '720p') + ', ' + seconds + ' seconds'
     : (ai.photoWithPrint ? 'Digital photo and one print per photo' : 'Digital photo only');
-  const basis = ai.mode === 'unlimited' ? 'Unlimited during booked hours' : 'Fixed allocation';
+  const basis = ai.mode === 'unlimited' ? 'Unlimited during booked hours' : 'One ' + output + ' per expected guest';
   let price = count(ai.quantity, output) + ' × ' + amount(ai.unitPrice) + ' per ' + output;
   if (video && seconds !== 10) {
     const baseRate = RATE_CARD.videoRate10Seconds[unit.videoResolution || '720p'];
@@ -113,16 +113,11 @@ function productionPlan(unit) {
     ['Estimated capacity', inputs + ' per generation ' + queue + '. Counting complete generations gives ' + result + ' over the booking.'],
     ['Quoted output', price],
   ];
-  const notes = [];
-  if (ai.mode === 'fixed' && ai.overCapacity) notes.push('The fixed allocation exceeds estimated operating capacity.');
-  const available = ai.capacity == null || ai.quantity == null ? null : Math.min(ai.capacity, ai.quantity);
-  if (available != null && ai.expectedGuests > available) {
-    notes.push('At one ' + output + ' per guest, approximately ' + count(ai.expectedGuests - available, 'guest') +
-      ' would exceed the planned output.');
-  }
+  const capacityNote = ai.guestShortfall > 0 ? 'At one ' + output + ' per guest, approximately ' +
+    count(ai.guestShortfall, 'guest') + ' would exceed the estimated booth capacity.' : '';
   return '<section class="rv-production"><h3>AI production plan</h3><dl class="rv-details">' +
     facts.map(([label, value]) => '<div><dt>' + escape(label) + '</dt><dd>' + escape(value) + '</dd></div>').join('') +
-    '</dl>' + (notes.length ? '<p class="rv-capacity-note">' + escape(notes.join(' ')) + '</p>' : '') + '</section>';
+    '</dl>' + (capacityNote ? '<p class="rv-capacity-note">' + escape(capacityNote) + '</p>' : '') + '</section>';
 }
 function detailList(unit) {
   return '<dl class="rv-details">' + details(unit).map(([label, value]) =>
@@ -168,7 +163,7 @@ function terms(units) {
     ['Payment', '50% in advance and 50% on delivery.'],
   ];
   if (units.some(unit => ['aiPhoto', 'aiVideo'].includes(unit.experience))) {
-    policies.splice(4, 0, ['AI output', 'Fixed bookings are priced by the selected number of outputs. Unlimited bookings are priced using estimated capacity during event hours. Actual output depends on guest participation and operating conditions.']);
+    policies.splice(4, 0, ['AI output', 'The one-per-guest plan includes one AI photo or video per expected guest at that booth. Unlimited bookings are priced using estimated capacity during event hours. Actual output depends on guest participation and operating conditions.']);
   }
   if (units.some(unit => unit.experience === 'aiPhoto' && unit.addons?.includes('printer'))) {
     policies.splice(5, 0, ['AI photo prints', 'Each quoted AI photo includes one print when the on-site printer is selected. Printer hire is shown separately. A Mirror Booth package credit covers the hire.']);

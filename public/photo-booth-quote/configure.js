@@ -233,17 +233,14 @@ function generationEstimate(unit) {
   }
   if (info.expectedGuests != null && info.capacity != null) {
     if (info.guestShortfall > 0) {
-      rows.push('At one session per guest, around ' + countLabel(info.guestShortfall, 'guest') + ' may miss a turn. Extend the hours or split attendance across booths.');
-    } else if (info.mode === 'fixed' && info.allocation != null && info.allocation < info.expectedGuests) {
-      rows.push('The allowance covers ' + countLabel(info.allocation, output) + ' for ' + countLabel(info.expectedGuests, 'expected guest') + '.');
+      const options = unit.addons.includes('queue') ? 'Extend the hours or split guests across booths.' :
+        'Add queue management, extend the hours or split guests across booths.';
+      rows.push('At one session per guest, around ' + countLabel(info.guestShortfall, 'guest') + ' may miss a turn. ' + options);
     } else {
       rows.push('The schedule allows one session for each of the ' + countLabel(info.expectedGuests, 'expected guest') + '.');
     }
   }
-  if (info.overCapacity) {
-    rows.push('Lower the reserved quantity to ' + currency.format(info.capacity) + ' or increase this booth’s capacity.');
-  }
-  const plan = info.mode === 'unlimited' ? 'Unlimited' : 'Fixed quantity';
+  const plan = info.mode === 'unlimited' ? 'Unlimited' : 'One per guest';
   const showCost = info.quantity != null && info.unitPrice != null && info.amount != null;
   const formula = showCost ? countLabel(info.quantity, output) + ' × ' + money(info.unitPrice) + ' = ' + money(info.amount) : money(info.unitPrice) + ' per ' + output;
   return '<div class="cfg-estimate-head"><strong>' + plan + ' · AI generation</strong><span>' + escape(formula) + '</span></div>' +
@@ -261,7 +258,7 @@ function attendanceSection(units, unit) {
   const ai = isAi(unit);
   const mode = unit.aiMode ?? 'fixed';
   const modes = [
-    ['fixed', 'Fixed quantity', 'Reserve a set number of photos or videos.'],
+    ['fixed', 'One per guest', 'The price uses your expected guest count.'],
     ['unlimited', 'Unlimited during event hours', 'Guests can return for more. Pricing uses the full capacity of this booth.'],
   ].map(([value, label, description]) => '<label class="cfg-staff-choice"><input type="radio" name="cfg-ai-mode" data-cfg-field="aiMode" value="' +
     value + '" aria-describedby="cfg-error-aiMode"' + (mode === value ? ' checked' : '') + '><span><strong>' + label +
@@ -276,10 +273,6 @@ function attendanceSection(units, unit) {
     guestHint + '</p>' + errorSlot('expectedGuests') + '</div>' +
     '<div class="cfg-generation" data-cfg-generation' + (ai ? '' : ' hidden') + '>' +
     '<fieldset class="cfg-plan-options"><legend>AI generation plan</legend><div class="cfg-staff-options">' + modes + '</div></fieldset>' + errorSlot('aiMode') +
-    '<div class="cfg-field cfg-allocation" data-cfg-allocation' + (mode === 'unlimited' ? ' hidden' : '') +
-    '><label for="cfg-aiQuantity">Reserved quantity <span class="cfg-optional">(optional)</span></label><input type="number" min="1" step="1" inputmode="numeric" id="cfg-aiQuantity" data-cfg-field="aiQuantity" value="' +
-    escape(unit.aiQuantity) + '" placeholder="' + escape(unit.expectedGuests || 'One per expected guest') + '" aria-describedby="cfg-quantity-hint cfg-error-aiQuantity">' +
-    '<p id="cfg-quantity-hint" class="cfg-hint">Leave blank for one per expected guest. Enter fewer for groups, or more for repeat sessions.</p>' + errorSlot('aiQuantity') + '</div>' +
     '<label class="cfg-early cfg-plan-queue"><input type="checkbox" data-cfg-field="planQueue"' + (unit.addons.includes('queue') ? ' checked' : '') +
     '>Include a collection screen with queue management · ' + dailyRate(addonPrice('queue', unit.type)) + '</label>' +
     '<div class="cfg-estimate" data-cfg-estimate aria-live="polite" aria-atomic="true">' + generationEstimate(unit) + '</div></div></section>';
@@ -527,7 +520,7 @@ export function installConfig(root, { getUnits, getActiveId, setActive, changed 
     } else if (key === 'longDayOffer') {
       unit.longDayOffer = input.checked && isLongDayOfferEligible(unit);
     } else {
-      const numeric = ['reportDayOffset', 'screenSize', 'additionalStaff', 'expectedGuests', 'aiQuantity', 'videoSeconds'].includes(key);
+      const numeric = ['reportDayOffset', 'screenSize', 'additionalStaff', 'expectedGuests', 'videoSeconds'].includes(key);
       unit[key] = numeric && input.value !== '' ? Number(input.value) : input.value;
       if (numeric && input.validity.badInput) unit[key] = -1;
       if (key === 'screenSize') root.querySelector('[data-cfg-hire-rate]').textContent = money(boothHireRate(unit));
@@ -561,8 +554,6 @@ export function installConfig(root, { getUnits, getActiveId, setActive, changed 
     root.querySelector('[data-cfg-ai-heading]').hidden = !ai;
     root.querySelector('[data-cfg-guests-optional]').hidden = ai;
     root.querySelector('#cfg-expectedGuests').required = ai;
-    root.querySelector('[data-cfg-allocation]').hidden = unit.aiMode === 'unlimited';
-    root.querySelector('#cfg-aiQuantity').placeholder = unit.expectedGuests > 0 ? String(unit.expectedGuests) : 'One per expected guest';
     const estimate = root.querySelector('[data-cfg-estimate]');
     const estimateMarkup = generationEstimate(unit);
     if (estimate.innerHTML !== estimateMarkup) estimate.innerHTML = estimateMarkup;
