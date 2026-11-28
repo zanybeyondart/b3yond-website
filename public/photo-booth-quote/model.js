@@ -41,10 +41,12 @@ export const RATE_CARD = {
   displaySizePremiumDay: { 24: 0, 27: 100, 32: 200 },
   aiPhotoRate: 0.50,
   aiPhotoPrintRate: 1.50,
+  customArtworkSetup: 350,
   videoRate10Seconds: { '720p': 6, '1080p': 12 },
   overtimeHour: 400,
   earlySetupHour: 100,
   addonDay: { queue: 350, stanchions: 150, printer: 350, props: 0 },
+  displayPrinterDay: 200,
   deliverySetup: { qr: 100, email: 150 },
   promoterHour: 75,
   transportDay: { Ajman: 150, Sharjah: 175, Dubai: 200, 'Abu Dhabi': 500 },
@@ -58,7 +60,7 @@ export function createUnit(type, id = globalThis.crypto.randomUUID()) {
     reportTime: '', reportDayOffset: 0, addons: type === 'mirror' ? ['printer', 'email'] : [],
     screenSide: 'either', screenSize: 24, venueEmirate: '', longDayOffer: false,
     staffing: 'client', additionalStaff: 0, staffHoursPerDay: '',
-    expectedGuests: '', aiMode: 'fixed', videoResolution: '720p', videoSeconds: 15,
+    expectedGuests: '', aiMode: 'fixed', customArtwork: false, videoResolution: '720p', videoSeconds: 15,
   };
 }
 
@@ -286,12 +288,16 @@ export function boothHireRate(unit, rates = RATE_CARD) {
   return validRate(premium) ? money(baseRate + premium) : null;
 }
 
-export function addonPrice(id, type, rates = RATE_CARD) {
+export function addonPrice(id, booth, rates = RATE_CARD) {
+  const type = typeof booth === 'string' ? booth : booth?.type;
+  if (id === 'printer' && type === 'classic' && rates.displayPrinterDay !== undefined) return rates.displayPrinterDay;
   return digitalSetupIds.has(id) ? rates.deliverySetup?.[id] : rates.addonDay?.[id];
 }
 
-export function addonIncluded(id, type) {
-  return type === 'mirror' && (id === 'printer' || id === 'email');
+export function addonIncluded(id, booth) {
+  const type = typeof booth === 'string' ? booth : booth?.type;
+  if (type === 'mirror') return id === 'printer' || id === 'email';
+  return type === 'classic' && id === 'email' && Array.isArray(booth.addons) && booth.addons.includes('printer');
 }
 
 const money = value => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -342,7 +348,8 @@ export function priceUnit(unit, rates = RATE_CARD) {
   for (const item of optionalItems) {
     if (!selected.has(item.id)) continue;
     const digital = digitalSetupIds.has(item.id);
-    const rate = addonPrice(item.id, unit.type, rates);
+    const included = addonIncluded(item.id, unit);
+    const rate = included ? 0 : addonPrice(item.id, unit, rates);
     const quantity = digital ? 1 : days;
     const basis = digital ? 'setup' : 'day';
     let label = item.name;
@@ -350,11 +357,8 @@ export function priceUnit(unit, rates = RATE_CARD) {
       label = 'On-site photo printer hire';
       if (unit.experience === 'aiVideo') label += ' · video stills';
     }
+    if (included) label += unit.type === 'mirror' ? ' · Mirror package' : ' · printer package';
     lines.push(line(label, quantity, rate, basis));
-    if (addonIncluded(item.id, unit.type)) {
-      const credit = item.id === 'printer' ? 'On-site photo printer hire' : item.name;
-      lines.push(line('Mirror package credit · ' + credit, quantity, rate, basis, -1));
-    }
   }
   const complete = !Object.keys(validateUnit(unit)).length && lines.every(item => item.amount !== null);
   return { lines, total: complete ? money(lines.reduce((sum, item) => sum + item.amount, 0)) : null };
@@ -401,14 +405,19 @@ function mergedVenueDays(venues) {
 
 export function priceQuote(units, rates = RATE_CARD) {
   const results = units.map(unit => priceUnit(unit, rates));
+  const bookingLines = [];
+  if (units.some(unit => unit.experience === 'aiPhoto' && unit.customArtwork === true)) {
+    bookingLines.push(line('Custom AI photo artwork', 1, rates.customArtworkSetup, 'booking'));
+  }
   const priced = results.length > 0 && results.every(result => result.total !== null);
   const subtotal = priced ? money(results.reduce((sum, result) => sum + result.total, 0)) : null;
   const travelLines = transportLines(units, rates);
   const travelPending = travelLines.some(item => item.amount === null);
   const travelDays = travelLines.some(item => item.days === null) ? null : travelLines.reduce((sum, item) => sum + item.days, 0);
   const travelTotal = travelPending ? null : money(travelLines.reduce((sum, item) => sum + item.amount, 0));
-  const total = subtotal === null || travelTotal === null ? null : money(subtotal + travelTotal);
-  return { units: results, subtotal, travelDays, travelTotal, travelLines, travelPending, total };
+  const bookingTotal = bookingLines.some(item => item.amount === null) ? null : money(bookingLines.reduce((sum, item) => sum + item.amount, 0));
+  const total = subtotal === null || travelTotal === null || bookingTotal === null ? null : money(subtotal + bookingTotal + travelTotal);
+  return { units: results, subtotal, bookingLines, travelDays, travelTotal, travelLines, travelPending, total };
 }
 
 export function quoteEstimate(units, rates = RATE_CARD) {
@@ -416,7 +425,7 @@ export function quoteEstimate(units, rates = RATE_CARD) {
   const estimate = { amount: quote.total, assumedDays: false, transportPending: quote.travelPending, incomplete: quote.total === null };
   if (!estimate.incomplete || !units.length) return estimate;
 
-  let amount = 0;
+  let amount = quote.bookingLines.reduce((sum, item) => sum + (item.amount ?? 0), 0);
   const scheduledVenues = [];
   units.forEach((unit, index) => {
     let result = quote.units[index];

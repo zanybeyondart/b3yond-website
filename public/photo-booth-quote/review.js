@@ -1,4 +1,4 @@
-import { ADDONS, DELIVERY_OPTIONS, EXPERIENCES, RATE_CARD, generationInfo, getBooth, priceQuote, scheduleInfo, staffingInfo, transportInfo } from './model.js';
+import { ADDONS, DELIVERY_OPTIONS, EXPERIENCES, RATE_CARD, generationInfo, getBooth, priceQuote, quoteEstimate, scheduleInfo, staffingInfo } from './model.js';
 
 const currency = new Intl.NumberFormat('en-AE', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const fractionalCurrency = new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -36,11 +36,14 @@ function count(value, unit) {
 }
 function boothLabel(units, unit) {
   const name = getBooth(unit.type)?.name ?? 'Booth';
-  return name + ' ' + (units.filter(item => item.type === unit.type).indexOf(unit) + 1);
+  const same = units.filter(item => item.type === unit.type);
+  return same.length === 1 ? name : name + ' ' + (same.indexOf(unit) + 1);
 }
-function details(unit) {
+function dateRange(unit) {
+  return unit.startDate === unit.endDate ? day(unit.startDate) : day(unit.startDate) + ' – ' + day(unit.endDate);
+}
+function details(unit, includeHeader) {
   const info = scheduleInfo(unit);
-  const dates = unit.startDate === unit.endDate ? day(unit.startDate) : day(unit.startDate) + ' – ' + day(unit.endDate);
   const overnight = unit.endTime && unit.endTime < unit.startTime ? ' (next day)' : '';
   const start = unit.earlySetup ? unit.reportTime : info.standardSetupTime;
   const previous = Number(unit.earlySetup ? unit.reportDayOffset : info.standardSetupDayOffset) === -1;
@@ -49,25 +52,27 @@ function details(unit) {
   const delivery = DELIVERY_OPTIONS.filter(item => selected.has(item.id)).map(item =>
     item.id === 'printer' && unit.experience === 'aiVideo' ? item.name + ' (still image)' : item.name).join(', ');
   const addons = ADDONS.filter(item => selected.has(item.id)).map(item => item.name).join(', ');
-  const { emirate, rate } = transportInfo(unit);
   const promoter = unit.staffing === 'b3yond' ? '1 B3YOND promoter' : '1 client-provided promoter';
   const extra = Number(unit.additionalStaff) || 0;
   const staffing = staffingInfo(unit);
   const needsWifi = ['aiPhoto', 'aiVideo'].includes(unit.experience) || selected.has('qr') || selected.has('email');
   const rows = [
-    ['Experience', EXPERIENCES.find(item => item.id === unit.experience)?.name ?? 'Pending'],
-    ['Venue', unit.venue || 'Pending'],
-    ['Transport', rate == null ? (emirate ? emirate + ' · ' : '') + 'Transport to confirm' : emirate + ' · ' + amount(rate) + ' per venue per day'],
-    ['Event dates', dates + (info.days > 1 ? ' · ' + count(info.days, 'day') : '')],
     ['Daily event time', clock(unit.startTime) + ' – ' + clock(unit.endTime) + overnight + ' GST'],
     ['Crew arrival', arrival + (unit.earlySetup ? ' · Earlier reporting' : ' · Two-hour setup')],
     ['On-site staffing', promoter + (extra > 0 ? ' + ' + extra + ' additional B3YOND staff' : '')],
-    ['Technical support', 'Remote support included'],
     ['Guest delivery', delivery || 'None selected'],
-    ['Add-ons', addons || 'None'],
     ['Venue Wi-Fi', needsWifi ? 'Reliable internet required' : 'Framed photo capture works offline'],
   ];
-  if (unit.type === 'classic') rows.unshift(['Display size', (unit.screenSize || 24) + '-inch screen']);
+  if (includeHeader) {
+    rows.unshift(
+      ['Experience', EXPERIENCES.find(item => item.id === unit.experience)?.name ?? 'Pending'],
+      ['Venue', unit.venue || 'Pending'],
+      ['Event dates', dateRange(unit) + (info.days > 1 ? ' · ' + count(info.days, 'day') : '')],
+    );
+    if (unit.type === 'classic') rows.unshift(['Display size', (unit.screenSize || 24) + '-inch screen']);
+  }
+  if (addons) rows.push(['Add-ons', addons]);
+  if (unit.experience === 'aiPhoto') rows.push(['Artwork', unit.customArtwork === true ? 'Custom theme for this booking' : 'Standard theme included']);
   if (staffing.people > 0) {
     const personLabel = staffing.people === 1 ? '1 person' : staffing.people + ' people';
     let shift = personLabel + ' × ' + count(staffing.hoursPerDay, 'hour') + '/day × ' +
@@ -98,29 +103,23 @@ function productionPlan(unit) {
     ? (unit.videoResolution || '720p') + ', ' + seconds + ' seconds'
     : (ai.photoWithPrint ? 'Digital photo and one print per photo' : 'Digital photo only');
   const basis = ai.mode === 'unlimited' ? 'Unlimited during booked hours' : 'One ' + output + ' per expected guest';
-  let price = count(ai.quantity, output) + ' × ' + amount(ai.unitPrice) + ' per ' + output;
-  if (video && seconds !== 10) {
-    const baseRate = RATE_CARD.videoRate10Seconds[unit.videoResolution || '720p'];
-    price += ' (' + (seconds / 10) + ' × the 10-second rate of ' + amount(baseRate) + ')';
-  }
-  const minutes = schedule.hoursPerDay == null ? null : Math.round(schedule.hoursPerDay * 60);
-  const inputs = count(minutes, 'minute') + '/day × 60 seconds/minute ÷ ' + count(ai.cycleSeconds, 'second');
   const queue = unit.addons?.includes('queue') ? 'with queue management' : 'without queue management';
-  const result = count(ai.capacityPerDay, output) + '/day × ' + count(schedule.days, 'day') + ' = ' + count(ai.capacity, output);
+  const capacity = count(ai.capacityPerDay, output) + '/day' +
+    (schedule.days > 1 ? ' × ' + count(schedule.days, 'day') + ' = ' + count(ai.capacity, output) : '') +
+    ' at ' + count(ai.cycleSeconds, 'second') + ' per session ' + queue;
   const facts = [
-    ['Expected guests', count(ai.expectedGuests, 'guest') + ' across this booking'],
-    ['Pricing basis', basis + ' · ' + format],
-    ['Estimated capacity', inputs + ' per generation ' + queue + '. Counting complete generations gives ' + result + ' over the booking.'],
-    ['Quoted output', price],
+    ['Guests', count(ai.expectedGuests, 'guest') + ' over the booking'],
+    ['AI plan', basis + ' · ' + format],
+    ['Estimated capacity', capacity],
   ];
   const capacityNote = ai.guestShortfall > 0 ? 'At one ' + output + ' per guest, approximately ' +
     count(ai.guestShortfall, 'guest') + ' would exceed the estimated booth capacity.' : '';
-  return '<section class="rv-production"><h3>AI production plan</h3><dl class="rv-details">' +
+  return '<section class="rv-production"><h3>Guest experience</h3><dl class="rv-details">' +
     facts.map(([label, value]) => '<div><dt>' + escape(label) + '</dt><dd>' + escape(value) + '</dd></div>').join('') +
     '</dl>' + (capacityNote ? '<p class="rv-capacity-note">' + escape(capacityNote) + '</p>' : '') + '</section>';
 }
-function detailList(unit) {
-  return '<dl class="rv-details">' + details(unit).map(([label, value]) =>
+function detailList(unit, includeHeader = true) {
+  return '<dl class="rv-details">' + details(unit, includeHeader).map(([label, value]) =>
     '<div><dt>' + escape(label) + '</dt><dd>' + escape(value) + '</dd></div>').join('') + '</dl>';
 }
 function breakdown(result) {
@@ -128,34 +127,34 @@ function breakdown(result) {
     const included = line.rate === 0 && line.amount === 0;
     const unitRate = included ? '' : '<small class="rv-rate"> × ' + escape(amount(line.rate)) + '/' + escape(line.unit) + '</small>';
     return '<tr><th scope="row">' + escape(line.label) + '</th><td>' + count(line.quantity, line.unit) +
-      unitRate + '</td><td>' + (included ? 'Included · ' + escape(amount(0)) : escape(amount(line.amount))) + '</td></tr>';
+      unitRate + '</td><td>' + (included ? 'Included' : escape(amount(line.amount))) + '</td></tr>';
   }).join('');
   return '<table class="rv-lines"><thead><tr><th scope="col">Item</th><th scope="col">Quantity × rate</th><th scope="col">Amount</th></tr></thead><tbody>' +
     rows + '</tbody><tfoot><tr><th scope="row" colspan="2">Booth subtotal</th><td>' + escape(amount(result.total)) + '</td></tr></tfoot></table>';
 }
 
-function quotationTotals(quote) {
+function quotationTotals(quote, estimate, showTotal) {
   const totalLine = (label, value, className = '') =>
     '<div class="rv-tally-line ' + className + '"><dt>' + label + '</dt><dd>' + escape(value) + '</dd></div>';
   const subtotal = totalLine('Booth charges', amount(quote.subtotal));
+  const booking = quote.bookingLines.map(line => totalLine(escape(line.label) + '<small>Once per booking</small>', amount(line.amount))).join('');
   const travel = quote.travelLines.map(line => {
-    const place = line.emirate ? escape(line.emirate) : 'Venue';
+    const place = line.emirate ? escape(line.emirate) : 'Other venue';
     const units = count(line.days, 'venue-day');
     const rate = line.rate == null ? '' : ' × ' + escape(amount(line.rate));
-    const label = line.amount == null ? 'Transport to confirm' : 'Transport';
-    return totalLine(label + ' · ' + place + '<small>' + units + rate + '</small>',
+    return totalLine('Transport · ' + place + '<small>' + units + rate + '</small>',
       line.amount == null ? 'To confirm' : amount(line.amount));
   }).join('');
-  return '<dl class="rv-tally">' + subtotal + travel +
-    totalLine('Estimated total before VAT', amount(quote.total), 'rv-tally-total') + '</dl>';
+  const total = showTotal ? totalLine(quote.total == null ? 'Priced so far before VAT' : 'Estimate before VAT',
+    amount(estimate), 'rv-tally-total') : '';
+  return '<dl class="rv-tally">' + subtotal + booking + travel + total + '</dl>';
 }
 
-function terms(units) {
+function terms(units, collapsed = false) {
   const localRates = Object.entries(RATE_CARD.transportDay).map(([emirate, rate]) =>
     emirate + ' ' + amount(rate)).join(', ');
   const policies = [
-    ['Access and setup', 'Provide venue access and power by the agreed reporting time. Standard crew arrival is two hours before opening on each event day.'],
-    ['Early arrival', 'Additional staffed time before standard reporting is ' + amount(RATE_CARD.earlySetupHour) + ' per hour per booth. Arrange earlier unattended installation separately.'],
+    ['Access and setup', 'Provide venue access and power by the agreed reporting time. Standard setup starts two hours before opening each day. Earlier staffed reporting costs ' + amount(RATE_CARD.earlySetupHour) + ' per hour per booth. Arrange unattended early installation separately.'],
     ['Event extensions', 'Extra booth time is ' + amount(RATE_CARD.overtimeHour) + ' per hour per booth, subject to client approval and availability. Unlimited AI output and any extended staff shifts are recalculated for the new hours.'],
     ['Staffing', 'Remote technical support is included. B3YOND promoters are charged at ' + amount(RATE_CARD.promoterHour) + ' per person-hour for booked shifts. The client supplies a promoter for any remaining opening hours.'],
     ['Connectivity', 'Provide reliable Wi-Fi for AI generation, email delivery and QR downloads. Framed photos can be captured offline.'],
@@ -163,37 +162,48 @@ function terms(units) {
     ['Payment', '50% in advance and 50% on delivery.'],
   ];
   if (units.some(unit => ['aiPhoto', 'aiVideo'].includes(unit.experience))) {
-    policies.splice(4, 0, ['AI output', 'The one-per-guest plan includes one AI photo or video per expected guest at that booth. Unlimited bookings are priced using estimated capacity during event hours. Actual output depends on guest participation and operating conditions.']);
+    policies.splice(3, 0, ['AI output', 'The guest plan covers one output per expected guest at each booth. Unlimited pricing uses the estimated capacity during booked hours. Actual output depends on participation and operating conditions.']);
   }
   if (units.some(unit => unit.experience === 'aiPhoto' && unit.addons?.includes('printer'))) {
-    policies.splice(5, 0, ['AI photo prints', 'Each quoted AI photo includes one print when the on-site printer is selected. Printer hire is shown separately. A Mirror Booth package credit covers the hire.']);
+    policies.splice(4, 0, ['AI photo prints', 'Printed AI photos include one print per generation. Mirror Booth hire includes the printer. The Display Stand printer package includes email setup when selected.']);
   }
-  return '<section class="rv-terms"><h2>Terms and conditions</h2><dl>' + policies.map(([name, detail]) =>
-    '<div><dt>' + escape(name) + '</dt><dd>' + escape(detail) + '</dd></div>').join('') + '</dl></section>';
+  const content = '<dl>' + policies.map(([name, detail]) =>
+    '<div><dt>' + escape(name) + '</dt><dd>' + escape(detail) + '</dd></div>').join('') + '</dl>';
+  return collapsed ? '<details class="rv-terms rv-disclosure"><summary>Terms and conditions</summary>' + content + '</details>' :
+    '<section class="rv-terms"><h2>Terms and conditions</h2>' + content + '</section>';
 }
 
 export function renderReview(units) {
+  if (!units.length) return '';
   const quote = priceQuote(units);
+  const estimate = quote.total ?? quoteEstimate(units).amount;
   const panels = units.map((unit, i) => {
     const title = escape(boothLabel(units, unit));
     const booth = getBooth(unit.type);
     const image = booth ? '<img class="rv-thumb" src="./assets/' + escape(booth.id) + '.webp" alt="">' : '';
-    return '<article class="rv-panel"><header class="rv-head">' + image + '<h2>' + title + '</h2>' +
+    const experience = EXPERIENCES.find(item => item.id === unit.experience)?.name ?? '';
+    const description = [experience, unit.type === 'classic' ? (unit.screenSize || 24) + '″ display' : ''].filter(Boolean).join(' · ');
+    return '<article class="rv-panel"><header class="rv-head">' + image + '<div><h2>' + title + '</h2>' +
+      '<p>' + escape(description) + '</p></div>' +
       '<button type="button" data-action="edit-unit" data-id="' + escape(unit.id) + '" aria-label="Edit ' + title +
-      '" class="rv-edit">' + pencil + ' Edit</button></header><div class="rv-columns"><section><h3>Event details</h3>' +
-      detailList(unit) + productionPlan(unit) + '</section><section><h3>Price breakdown</h3>' + breakdown(quote.units[i]) + '</section></div></article>';
+      '" class="rv-edit">' + pencil + ' Edit</button></header>' +
+      '<p class="rv-booking">' + escape(dateRange(unit)) + ' · ' + escape(unit.venue || 'Venue pending') + '</p>' +
+      '<details class="rv-disclosure rv-booth-details"><summary>Event details and prices</summary><div class="rv-columns"><section><h3>Event details</h3>' +
+      detailList(unit, false) + productionPlan(unit) + '</section><section><h3>Price breakdown</h3>' + breakdown(quote.units[i]) + '</section></div></details></article>';
   });
-  return '<div class="rv-stack">' + panels.join('') + '<section class="rv-total"><div><h2>Quotation summary</h2><p>' +
-    'Transport is shared by booths at the same venue on the same date.' +
-    '</p></div>' + quotationTotals(quote) + '</section>' + terms(units) + '</div>';
+  return '<div class="rv-stack"><section class="rv-total"><div><h2>' +
+    (quote.total == null ? 'Priced so far before VAT' : 'Estimate before VAT') + '</h2><strong>' + escape(amount(estimate)) + '</strong>' +
+    (quote.travelPending ? '<p>Transport still to confirm.</p>' : '') + '</div>' +
+    quotationTotals(quote, estimate, false) + '</section>' + panels.join('') + terms(units, true) + '</div>';
 }
 
 export function renderPrint(units) {
-  const quote = priceQuote(units);
-  const date = quoteDateFormat.format(new Date());
   if (!units.length) return '';
+  const quote = priceQuote(units);
+  const estimate = quote.total ?? quoteEstimate(units).amount;
+  const date = quoteDateFormat.format(new Date());
   const lastUnit = units.at(-1);
-  const separateSummary = lastUnit.experience !== 'frame' || quote.units.at(-1).lines.length > 4 || quote.travelLines.length > 1 || lastUnit.venue?.length > 80;
+  const separateSummary = lastUnit.experience !== 'frame' || quote.units.at(-1).lines.length > 4 || quote.travelLines.length > 1 || quote.bookingLines.length > 0 || lastUnit.venue?.length > 80;
   const pages = units.length + Number(separateSummary);
   const sheet = (index, title, body) => {
     const compact = quote.units[index]?.lines.length > 10 ? ' rv-sheet-compact' : '';
@@ -201,7 +211,7 @@ export function renderPrint(units) {
       '<div class="rv-doc-meta"><span>' + escape(date) + '</span><span>Page ' + (index + 1) + ' of ' + pages + '</span></div>' +
       '<h1>' + title + '</h1>' + body + '</div></article>';
   };
-  const finalSection = quotationTotals(quote) + terms(units);
+  const finalSection = quotationTotals(quote, estimate, true) + terms(units);
   const sheets = units.map((unit, i) => sheet(i, 'Photo booth quotation',
     '<h2>' + escape(boothLabel(units, unit)) + '</h2>' + detailList(unit) + productionPlan(unit) + '<h3>Price breakdown</h3>' +
     breakdown(quote.units[i]) + (i === units.length - 1 && !separateSummary ? finalSection : '')));

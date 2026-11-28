@@ -25,17 +25,15 @@
     </header>
     <main class="wrap">
       <nav id="steps" class="steps" aria-label="Quotation progress"></nav>
-      <div class="page-heading"><div><h1 id="title" tabindex="-1"></h1><p id="intro"></p></div><div class="camera-mark" aria-hidden="true">
-        <svg viewBox="0 0 90 75"><g fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 19V3h16m54 0h16v16M2 56v16h16m54 0h16V56"/><circle cx="45" cy="37.5" r="21"/><path d="m45 16.5 10 16.8m8.2-6.3-10 17.2m10 3.8H43m2 10.5-10.5-18m-7.6 7.5 10-17m-10-4h20"/></g><circle cx="78" cy="13" r="2.4" fill="#0a8291"/></svg>
-      </div></div>
-      <aside id="running-estimate" class="running-estimate" aria-label="Running quotation estimate" hidden>
-        <div class="estimate-price"><span id="estimate-label">Estimate so far</span><strong id="estimate-amount" aria-live="polite" aria-atomic="true"></strong></div>
-        <span id="estimate-detail" class="estimate-detail"></span>
-      </aside>
+      <div class="page-heading"><h1 id="title" tabindex="-1"></h1><p id="intro"></p></div>
       <div id="pane"></div>
       <p class="selection-error" id="selection-error" role="alert" hidden></p>
       <section class="selection-bar" aria-label="Quotation controls">
-        <div class="bar-summary"><span class="bar-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Z"/><path d="m4 11.7 8 4.5 8-4.5M4 16l8 4.6 8-4.6"/></svg></span><div><small id="bar-label"></small><strong id="bar-status"></strong></div></div>
+        <div class="bar-summary" id="bar-summary"><span class="bar-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Z"/><path d="m4 11.7 8 4.5 8-4.5M4 16l8 4.6 8-4.6"/></svg></span><div><small id="bar-label"></small><strong id="bar-status"></strong></div></div>
+        <aside id="running-estimate" class="running-estimate" aria-label="Running quotation estimate" hidden>
+        <div class="estimate-price"><span id="estimate-label">Estimate so far</span><strong id="estimate-amount" aria-live="polite" aria-atomic="true"></strong></div>
+        <span id="estimate-detail" class="estimate-detail"></span>
+      </aside>
         <div class="bar-actions"><button type="button" id="back" data-action="back">Back</button><button type="button" id="next" data-action="next"></button></div>
       </section>
     </main>
