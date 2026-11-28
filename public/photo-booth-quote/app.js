@@ -1,4 +1,4 @@
-import {ADDONS, BOOTHS, DELIVERY_OPTIONS, RATE_CARD, boothHireRate, createUnit, getBooth, quoteEstimate, validateUnit} from './model.js';
+import {ADDONS, BOOTHS, DELIVERY_OPTIONS, RATE_CARD, artworkPricing, boothHireRate, createUnit, getBooth, quoteEstimate, validateUnit} from './model.js';
 import {renderConfig, installConfig, partForField, showErrors} from './configure.js';
 import {renderReview, renderPrint} from './review.js';
 
@@ -21,7 +21,7 @@ const escape = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;',
 const formatAED = value => 'AED ' + new Intl.NumberFormat('en-AE', {maximumFractionDigits:2}).format(value);
 const countText = n => n === 1 ? '1 booth' : n + ' booths';
 const isComplete = unit => Object.keys(validateUnit(unit)).length === 0;
-const empty = () => ({step:1, units:[], activeId:null, guide:Object.create(null)});
+const empty = () => ({step:1, units:[], activeId:null, artworkCount:2, guide:Object.create(null)});
 const availableAddons = new Set([...ADDONS,...DELIVERY_OPTIONS].map(option => option.id));
 const newProgress = () => ({part:0, furthest:0, finished:false});
 function firstErrorPart(unit) {
@@ -37,6 +37,7 @@ function restore() {
     const saved = JSON.parse(localStorage.getItem(key) || 'null');
     if (!saved || !Array.isArray(saved.units)) return empty();
     const result = empty();
+    result.artworkCount = artworkPricing(saved.artworkCount).count;
     for (const u of saved.units) {
       if (!u || typeof u.id !== 'string' || !u.id || result.guide[u.id] || !getBooth(u.type)) continue;
       const defaults = createUnit(u.type,u.id);
@@ -121,7 +122,7 @@ function updateEstimate() {
   const panel = byId('running-estimate');
   panel.hidden = !state.units.length || state.step === 3;
   if (panel.hidden) return;
-  const estimate = quoteEstimate(state.units);
+  const estimate = quoteEstimate(state.units,RATE_CARD,state.artworkCount);
   byId('estimate-label').textContent = estimate.incomplete ? 'Estimate so far' : 'Quote estimate';
   byId('estimate-amount').textContent = formatAED(estimate.amount);
   byId('estimate-detail').textContent = estimateDetails(estimate);
@@ -147,8 +148,8 @@ function render() {
   intro.textContent = s === 1 ? 'Add the booths you want for your event.' : s === 2 && state.units.length === 1 ? getBooth(unit.type).name : '';
   intro.hidden = !intro.textContent;
   byId('selection-error').hidden = true;
-  pane.innerHTML = s === 1 ? cards() : s === 2 ? renderConfig(state.units,state.activeId,part) : renderReview(state.units);
-  byId('print-view').innerHTML = s === 3 ? renderPrint(state.units) : '';
+  pane.innerHTML = s === 1 ? cards() : s === 2 ? renderConfig(state.units,state.activeId,part,state.artworkCount) : renderReview(state.units,state.artworkCount);
+  byId('print-view').innerHTML = s === 3 ? renderPrint(state.units,state.artworkCount) : '';
   updateControls();
 }
 function route() {
@@ -191,6 +192,7 @@ function add(type) {
 function remove(unit) {
   state.units = state.units.filter(u => u.id !== unit.id);
   delete state.guide[unit.id];
+  if (!state.units.length) state.artworkCount = 2;
   if (state.activeId === unit.id) state.activeId = state.units[0]?.id || null;
   save(); render();
   const buttons = pane.querySelectorAll('.card-controls [data-type="'+unit.type+'"]');
@@ -211,7 +213,7 @@ function showSummary() {
   const selected = types.map(id => ({...getBooth(id),count:state.units.filter(u => u.type === id).length}));
   const rows = selected.map(b => '<div class="dlg-row"><img src="./assets/'+b.id+'.webp" alt=""><strong>'+escape(b.name)+'</strong><span>Qty '+b.count+'</span></div>').join('');
   const status = state.units.length ? (state.units.filter(finished).length+' of '+countText(state.units.length)+' configured.') : 'Your quotation is empty. Choose a booth to get started.';
-  const estimate = quoteEstimate(state.units);
+  const estimate = quoteEstimate(state.units,RATE_CARD,state.artworkCount);
   const amount = estimate.amount === null ? '' : '<div class="dlg-total"><span>'+(estimate.incomplete?'Estimate so far':'Quote estimate')+'</span><strong>'+formatAED(estimate.amount)+'</strong></div><p class="dialog-note estimate-note">'+escape(estimateDetails(estimate))+'</p>';
   openDialog('Quote summary',rows+amount+'<p class="dialog-body">'+status+'</p>'+(state.units.length?'<p class="dialog-note">'+(storageWorking?'Your draft is saved on this device.':'This browser cannot save the draft after you close the page.')+'</p>':'')+
    '<div class="dlg-actions">'+(state.units.length?'<button class="dialog-btn" data-action="new-quote">New quote</button>':'')+(state.step>1?'<button class="dialog-btn" data-action="selection">Edit selection</button>':'')+'<button class="dialog-btn primary" data-action="close-summary">Continue editing</button></div>');
@@ -254,6 +256,8 @@ async function next() {
 
 installConfig(pane,{
   getUnits:() => state.units,getActiveId:() => state.activeId,
+  getArtworkCount:() => state.artworkCount,
+  setArtworkCount:count => {state.artworkCount = artworkPricing(count).count;},
   setActive:id => go(2,id),
   changed:({render:refresh}) => {save();if(refresh)render();else updateControls();},
 });

@@ -42,6 +42,7 @@ export const RATE_CARD = {
   aiPhotoRate: 0.50,
   aiPhotoPrintRate: 1.50,
   customArtworkSetup: 350,
+  customArtworkExtraPair: 250,
   videoRate10Seconds: { '720p': 6, '1080p': 12 },
   overtimeHour: 400,
   earlySetupHour: 100,
@@ -403,11 +404,27 @@ function mergedVenueDays(venues) {
   return days;
 }
 
-export function priceQuote(units, rates = RATE_CARD) {
+export function artworkPricing(count = 2, rates = RATE_CARD) {
+  const designCount = positiveCount(count) ?? 2;
+  const extraPairs = Math.ceil(designCount / 2) - 1;
+  const base = rates.customArtworkSetup;
+  const pairRate = rates.customArtworkExtraPair;
+  const amount = validRate(base) && (!extraPairs || validRate(pairRate))
+    ? money(base + (extraPairs ? extraPairs * pairRate : 0))
+    : null;
+  return { count: designCount, extraPairs, amount };
+}
+
+export function priceQuote(units, rates = RATE_CARD, artworkCount = 2) {
   const results = units.map(unit => priceUnit(unit, rates));
   const bookingLines = [];
   if (units.some(unit => unit.experience === 'aiPhoto' && unit.customArtwork === true)) {
-    bookingLines.push(line('Custom AI photo artwork', 1, rates.customArtworkSetup, 'booking'));
+    const artwork = artworkPricing(artworkCount, rates);
+    bookingLines.push({
+      ...line('Custom AI photo artwork', 1, artwork.amount, 'booking'),
+      artworkCount: artwork.count,
+      extraPairs: artwork.extraPairs,
+    });
   }
   const priced = results.length > 0 && results.every(result => result.total !== null);
   const subtotal = priced ? money(results.reduce((sum, result) => sum + result.total, 0)) : null;
@@ -420,8 +437,8 @@ export function priceQuote(units, rates = RATE_CARD) {
   return { units: results, subtotal, bookingLines, travelDays, travelTotal, travelLines, travelPending, total };
 }
 
-export function quoteEstimate(units, rates = RATE_CARD) {
-  const quote = priceQuote(units, rates);
+export function quoteEstimate(units, rates = RATE_CARD, artworkCount = 2) {
+  const quote = priceQuote(units, rates, artworkCount);
   const estimate = { amount: quote.total, assumedDays: false, transportPending: quote.travelPending, incomplete: quote.total === null };
   if (!estimate.incomplete || !units.length) return estimate;
 

@@ -72,7 +72,7 @@ function details(unit, includeHeader) {
     if (unit.type === 'classic') rows.unshift(['Display size', (unit.screenSize || 24) + '-inch screen']);
   }
   if (addons) rows.push(['Add-ons', addons]);
-  if (unit.experience === 'aiPhoto') rows.push(['Artwork', unit.customArtwork === true ? 'Custom theme for this booking' : 'Standard theme included']);
+  if (unit.experience === 'aiPhoto') rows.push(['Artwork', unit.customArtwork === true ? 'Shared custom artwork' : 'Standard theme included']);
   if (staffing.people > 0) {
     const personLabel = staffing.people === 1 ? '1 person' : staffing.people + ' people';
     let shift = personLabel + ' × ' + count(staffing.hoursPerDay, 'hour') + '/day × ' +
@@ -137,7 +137,18 @@ function quotationTotals(quote, estimate, showTotal) {
   const totalLine = (label, value, className = '') =>
     '<div class="rv-tally-line ' + className + '"><dt>' + label + '</dt><dd>' + escape(value) + '</dd></div>';
   const subtotal = totalLine('Booth charges', amount(quote.subtotal));
-  const booking = quote.bookingLines.map(line => totalLine(escape(line.label) + '<small>Once per booking</small>', amount(line.amount))).join('');
+  const booking = quote.bookingLines.map(line => {
+    let title = escape(line.label);
+    let basis = 'Once per booking';
+    if (line.artworkCount != null) {
+      title += ' · ' + escape(count(line.artworkCount, 'design')) + ' for the booking';
+      const extraRate = amount(RATE_CARD.customArtworkExtraPair);
+      basis = amount(RATE_CARD.customArtworkSetup) + ' for up to 2 designs';
+      basis += line.extraPairs ? ' + ' + count(line.extraPairs, 'extra set') + ' of up to 2 × ' + extraRate :
+        '. Each extra set of 1 or 2 costs ' + extraRate + '.';
+    }
+    return totalLine(title + '<small>' + escape(basis) + '</small>', amount(line.amount));
+  }).join('');
   const travel = quote.travelLines.map(line => {
     const place = line.emirate ? escape(line.emirate) : 'Other venue';
     const units = count(line.days, 'venue-day');
@@ -173,10 +184,10 @@ function terms(units, collapsed = false) {
     '<section class="rv-terms"><h2>Terms and conditions</h2>' + content + '</section>';
 }
 
-export function renderReview(units) {
+export function renderReview(units, artworkCount = 2) {
   if (!units.length) return '';
-  const quote = priceQuote(units);
-  const estimate = quote.total ?? quoteEstimate(units).amount;
+  const quote = priceQuote(units, RATE_CARD, artworkCount);
+  const estimate = quote.total ?? quoteEstimate(units, RATE_CARD, artworkCount).amount;
   const panels = units.map((unit, i) => {
     const title = escape(boothLabel(units, unit));
     const booth = getBooth(unit.type);
@@ -197,10 +208,10 @@ export function renderReview(units) {
     quotationTotals(quote, estimate, false) + '</section>' + panels.join('') + terms(units, true) + '</div>';
 }
 
-export function renderPrint(units) {
+export function renderPrint(units, artworkCount = 2) {
   if (!units.length) return '';
-  const quote = priceQuote(units);
-  const estimate = quote.total ?? quoteEstimate(units).amount;
+  const quote = priceQuote(units, RATE_CARD, artworkCount);
+  const estimate = quote.total ?? quoteEstimate(units, RATE_CARD, artworkCount).amount;
   const date = quoteDateFormat.format(new Date());
   const lastUnit = units.at(-1);
   const separateSummary = lastUnit.experience !== 'frame' || quote.units.at(-1).lines.length > 4 || quote.travelLines.length > 1 || quote.bookingLines.length > 0 || lastUnit.venue?.length > 80;
