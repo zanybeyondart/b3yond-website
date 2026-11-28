@@ -180,10 +180,10 @@ function terms(units, collapsed = false) {
     '<section class="rv-terms"><h2>Terms and conditions</h2>' + content + '</section>';
 }
 
-export function renderReview(units, artworkCount = 2) {
+export function renderReview(units, artworkCount = 2, saved = null) {
   if (!units.length) return '';
-  const quote = priceQuote(units, RATE_CARD, artworkCount);
-  const estimate = quote.total ?? quoteEstimate(units, RATE_CARD, artworkCount).amount;
+  const quote = saved?.quote ?? priceQuote(units, RATE_CARD, artworkCount);
+  const estimate = quote.total ?? saved?.estimate?.amount ?? quoteEstimate(units, RATE_CARD, artworkCount).amount;
   const panels = units.map((unit, i) => {
     const title = escape(boothLabel(units, unit));
     const booth = getBooth(unit.type);
@@ -204,11 +204,11 @@ export function renderReview(units, artworkCount = 2) {
     quotationTotals(quote, estimate, false) + '</section>' + panels.join('') + terms(units, true) + '</div>';
 }
 
-export function renderPrint(units, artworkCount = 2) {
+export function renderPrint(units, artworkCount = 2, saved = null) {
   if (!units.length) return '';
-  const quote = priceQuote(units, RATE_CARD, artworkCount);
-  const estimate = quote.total ?? quoteEstimate(units, RATE_CARD, artworkCount).amount;
-  const date = quoteDateFormat.format(new Date());
+  const quote = saved?.quote ?? priceQuote(units, RATE_CARD, artworkCount);
+  const estimate = quote.total ?? saved?.estimate?.amount ?? quoteEstimate(units, RATE_CARD, artworkCount).amount;
+  const date = quoteDateFormat.format(saved?.createdAt ? new Date(saved.createdAt) : new Date());
   const lastUnit = units.at(-1);
   const separateSummary = lastUnit.experience !== 'frame' || quote.units.at(-1).lines.length > 4 || quote.travelLines.length > 1 || quote.bookingLines.length > 0 || lastUnit.venue?.length > 80;
   const pages = units.length + Number(separateSummary);
@@ -225,3 +225,4 @@ export function renderPrint(units, artworkCount = 2) {
   if (separateSummary) sheets.push(sheet(units.length, 'Quotation summary', finalSection));
   return sheets.join('');
 }
+

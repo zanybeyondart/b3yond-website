@@ -21,7 +21,7 @@ const escape = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;',
 const formatAED = value => 'AED ' + new Intl.NumberFormat('en-AE', {maximumFractionDigits:2}).format(value);
 const countText = n => n === 1 ? '1 booth' : n + ' booths';
 const isComplete = unit => Object.keys(validateUnit(unit)).length === 0;
-const empty = () => ({step:1, units:[], activeId:null, artworkCount:2, guide:Object.create(null)});
+const empty = () => ({step:1, units:[], activeId:null, artworkCount:2, draftKey:crypto.randomUUID(), contact:{name:'',email:''}, guide:Object.create(null)});
 const availableAddons = new Set([...ADDONS,...DELIVERY_OPTIONS].map(option => option.id));
 const newProgress = () => ({part:0, furthest:0, finished:false});
 function firstErrorPart(unit) {
@@ -37,6 +37,8 @@ function restore() {
     const saved = JSON.parse(localStorage.getItem(key) || 'null');
     if (!saved || !Array.isArray(saved.units)) return empty();
     const result = empty();
+    result.draftKey = typeof saved.draftKey === 'string' && /^[a-f0-9-]{36,128}$/i.test(saved.draftKey) ? saved.draftKey : result.draftKey;
+    result.contact = {name:typeof saved.contact?.name === 'string' ? saved.contact.name : '',email:typeof saved.contact?.email === 'string' ? saved.contact.email : ''};
     result.artworkCount = artworkPricing(saved.artworkCount).count;
     for (const u of saved.units) {
       if (!u || typeof u.id !== 'string' || !u.id || result.guide[u.id] || !getBooth(u.type)) continue;
@@ -153,6 +155,12 @@ function render() {
   pane.innerHTML = s === 1 ? cards() : s === 2 ? renderConfig(state.units,state.activeId,part,state.artworkCount) : renderReview(state.units,state.artworkCount);
   byId('print-view').innerHTML = s === 3 ? renderPrint(state.units,state.artworkCount) : '';
   updateControls();
+  if (s === 3) {
+    const contact=document.createElement('section');contact.className='quote-contact';
+    contact.innerHTML='<label>Your name or company (optional)<input data-contact="name" maxlength="160" autocomplete="organization" value="'+escape(state.contact.name)+'"></label><label>Email (optional)<input data-contact="email" type="email" maxlength="200" autocomplete="email" value="'+escape(state.contact.email)+'"></label><p>Quotation details are saved for B3YOND to review.</p><p id="archive-status" role="status"></p>';
+    pane.prepend(contact);
+    saveQuote();
+  }
 }
 function route() {
   const id = state.activeId;
@@ -197,7 +205,7 @@ function add(type) {
 function remove(unit) {
   state.units = state.units.filter(u => u.id !== unit.id);
   delete state.guide[unit.id];
-  if (!state.units.length) state.artworkCount = 2;
+  if (!state.units.length) {state.artworkCount = 2;state.draftKey=crypto.randomUUID();state.contact={name:'',email:''};}
   if (state.activeId === unit.id) state.activeId = state.units[0]?.id || null;
   save(); render();
   const buttons = pane.querySelectorAll('.card-controls [data-type="'+unit.type+'"]');
@@ -273,6 +281,7 @@ async function next() {
     if (nextBooth) {go(2,nextBooth.id);announce('Configuring '+unitLabel(nextBooth));return;}
     go(3);return;
   }
+  await saveQuote();
   await Promise.allSettled(Array.from(byId('print-view').querySelectorAll('img'), img => img.decode()));
   window.print();
 }
@@ -354,5 +363,30 @@ window.addEventListener('popstate',event => {
   else go(dest.step,dest.id,dest.part,false);
   recordRoute(true);
 });
+let archiveTimer;
+let archiveChain=Promise.resolve();
+function saveQuote() {
+  if(state.step!==3)return Promise.resolve();
+  const payload={units:state.units,artworkCount:state.artworkCount,draftKey:state.draftKey,...state.contact};
+  const body=JSON.stringify(payload),draftKey=state.draftKey;
+  archiveChain=archiveChain.catch(()=>{}).then(async()=>{
+    try {
+      const response=await fetch('/api/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body});
+      if(!response.ok)throw new Error('Save failed');
+      const result=await response.json();
+      if(state.step===3&&state.draftKey===draftKey)byId('archive-status').textContent='Saved to B3YOND · '+result.id;
+    }catch{
+      if(state.step===3&&state.draftKey===draftKey)byId('archive-status').textContent='Online saving is unavailable. Keep your PDF and try again.';
+    }
+  });
+  return archiveChain;
+}
+pane.addEventListener('input',event=>{
+  const field=event.target.dataset.contact;
+  if(!['name','email'].includes(field))return;
+  state.contact[field]=event.target.value;save();
+  clearTimeout(archiveTimer);archiveTimer=setTimeout(saveQuote,650);
+});
 render();
 recordRoute(true);
+
