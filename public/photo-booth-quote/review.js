@@ -93,14 +93,15 @@ function productionPlan(unit) {
   const schedule = scheduleInfo(unit);
   const video = unit.experience === 'aiVideo';
   const output = video ? 'video' : 'photo';
+  const seconds = Number(unit.videoSeconds ?? 15);
   const format = video
-    ? (unit.videoResolution || '720p') + ', ' + (unit.videoSeconds || 15) + ' seconds'
+    ? (unit.videoResolution || '720p') + ', ' + seconds + ' seconds'
     : (ai.photoWithPrint ? 'Digital photo and one print per photo' : 'Digital photo only');
   const basis = ai.mode === 'unlimited' ? 'Unlimited during booked hours' : 'Fixed allocation';
   let price = count(ai.quantity, output) + ' × ' + amount(ai.unitPrice) + ' per ' + output;
-  if (video && Number(unit.videoSeconds ?? 15) < 15) {
-    const baseRate = RATE_CARD.videoRate15Seconds[unit.videoResolution || '720p'];
-    price += ' (' + unit.videoSeconds + '/15 of the ' + amount(baseRate) + ' rate for a 15-second clip)';
+  if (video && seconds !== 10) {
+    const baseRate = RATE_CARD.videoRate10Seconds[unit.videoResolution || '720p'];
+    price += ' (' + (seconds / 10) + ' × the 10-second rate of ' + amount(baseRate) + ')';
   }
   const minutes = schedule.hoursPerDay == null ? null : Math.round(schedule.hoursPerDay * 60);
   const inputs = count(minutes, 'minute') + '/day × 60 seconds/minute ÷ ' + count(ai.cycleSeconds, 'second');

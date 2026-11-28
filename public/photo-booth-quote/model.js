@@ -41,7 +41,7 @@ export const RATE_CARD = {
   displaySizePremiumDay: { 24: 0, 27: 100, 32: 200 },
   aiPhotoRate: 0.50,
   aiPhotoPrintRate: 1.50,
-  videoRate15Seconds: { '720p': 6, '1080p': 12 },
+  videoRate10Seconds: { '720p': 6, '1080p': 12 },
   overtimeHour: 400,
   earlySetupHour: 100,
   addonDay: { queue: 350, stanchions: 150, printer: 350, props: 0 },
@@ -182,9 +182,9 @@ export function generationInfo(unit, rates = RATE_CARD) {
   if (unit.experience === 'aiVideo') {
     const resolution = unit.videoResolution ?? '720p';
     const seconds = Number(unit.videoSeconds ?? 15);
-    const base = rates.videoRate15Seconds?.[resolution];
+    const base = rates.videoRate10Seconds?.[resolution];
     if (VIDEO_RESOLUTIONS.includes(resolution) && VIDEO_SECONDS.includes(seconds) && validRate(base)) {
-      unitPrice = money(base * seconds / 15);
+      unitPrice = money(base * seconds / 10);
     }
   }
   const amount = quantity === null || unitPrice === null ? null : money(quantity * unitPrice);
